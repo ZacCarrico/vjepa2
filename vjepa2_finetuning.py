@@ -460,7 +460,7 @@ video = clips_at_random_indices(
 ).data
 
 plot(video[0], title="Concert Scene", fname="test.png")
-display(Image.open("test.png"))
+Image.open("test.png").show()
 
 
 # In[39]:
