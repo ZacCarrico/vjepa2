@@ -75,11 +75,13 @@ video_url = "https://huggingface.co/datasets/merve/vlm_test_images/resolve/main/
 vr = VideoDecoder(video_url)
 frame_idx = np.arange(0, 32) # choosing some frames. here, you can define more complex sampling strategy
 video_frames = vr.get_frames_at(indices=frame_idx).data  # T x C x H x W
-video = processor(video_frames, return_tensors="pt").to(model.device)
-with torch.no_grad():
-    video_embeddings = model.get_vision_features(**video)
+# slow so skipping it
+# video = processor(video_frames, return_tensors="pt").to(model.device)
+# with torch.no_grad():
+#     video_embeddings = model.get_vision_features(**video)
 
-print(video_embeddings.shape)
+# print(video_embeddings.shape)
+
 del model
 
 
