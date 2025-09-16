@@ -7,14 +7,26 @@
 # Adapter tuning allows us to fine-tune large models with significantly fewer trainable parameters,
 # making it more memory efficient and faster to train while achieving comparable performance.
 
-import torch
-print("Torch:", torch.__version__)
-from torchcodec.decoders import VideoDecoder
+import json
+import math
+import pathlib
+import tarfile
+import time
+from functools import partial
+from typing import Optional, Tuple
 
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Optional, Tuple
-import math
+from huggingface_hub import hf_hub_download
+from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
+from torchcodec.decoders import VideoDecoder
+from torchcodec.samplers import clips_at_random_indices
+from torchvision.transforms import v2
+from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
+
+print("Torch:", torch.__version__)
 
 # Device Setup
 if torch.cuda.is_available():
@@ -27,11 +39,13 @@ print(f"Using device: {device}")
 
 # ## LoRA (Low-Rank Adaptation) Implementation
 
+
 class LoRALayer(nn.Module):
     """
     LoRA (Low-Rank Adaptation) layer that can be applied to any linear layer.
     This implementation follows the original LoRA paper: https://arxiv.org/abs/2106.09685
     """
+
     def __init__(
         self,
         in_features: int,
@@ -64,6 +78,7 @@ class AdaptedLinear(nn.Module):
     Linear layer with LoRA adaptation.
     During training, both original weights (frozen) and LoRA weights are used.
     """
+
     def __init__(
         self,
         original_linear: nn.Linear,
@@ -114,14 +129,21 @@ def apply_lora_to_model(
         Number of adapted modules
     """
     if target_modules is None:
-        target_modules = ['q_proj', 'v_proj', 'k_proj', 'out_proj']  # Common attention module names
+        target_modules = [
+            "q_proj",
+            "v_proj",
+            "k_proj",
+            "out_proj",
+        ]  # Common attention module names
 
     adapted_count = 0
 
     def replace_linear_with_lora(module, name):
         nonlocal adapted_count
         for child_name, child_module in module.named_children():
-            if isinstance(child_module, nn.Linear) and any(target in child_name for target in target_modules):
+            if isinstance(child_module, nn.Linear) and any(
+                target in child_name for target in target_modules
+            ):
                 # Replace with LoRA adapted version
                 adapted_linear = AdaptedLinear(
                     child_module,
@@ -163,15 +185,15 @@ def print_parameter_stats(model: nn.Module, model_name: str = "Model"):
 
 # ## Data Loading (Same as original fine-tuning)
 
-from huggingface_hub import hf_hub_download
-import tarfile
-import pathlib
-
 # Download and extract dataset
-fpath = hf_hub_download(repo_id="sayakpaul/ucf101-subset", filename="UCF101_subset.tar.gz", repo_type="dataset")
+fpath = hf_hub_download(
+    repo_id="sayakpaul/ucf101-subset",
+    filename="UCF101_subset.tar.gz",
+    repo_type="dataset",
+)
 
 with tarfile.open(fpath) as t:
-    t.extractall(".", filter='data')
+    t.extractall(".", filter="data")
 
 dataset_root_path = pathlib.Path("UCF101_subset")
 all_video_file_paths = list(dataset_root_path.glob("**/*.avi"))
@@ -207,10 +229,6 @@ print(f"Number of classes: {len(class_labels)}")
 
 # ## Dataset and DataLoader Setup
 
-from torch.utils.data import DataLoader, Dataset
-from torchcodec.samplers import clips_at_random_indices
-from torchvision.transforms import v2
-from functools import partial
 
 class CustomVideoDataset(Dataset):
     def __init__(self, video_file_paths, label2id):
@@ -252,8 +270,6 @@ test_ds = CustomVideoDataset(test_video_file_paths, label2id)
 
 # ## Model Setup with LoRA Adapters
 
-from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
-
 # Load model and processor
 model_name = "facebook/vjepa2-vitl-fpc16-256-ssv2"
 processor = VJEPA2VideoProcessor.from_pretrained(model_name)
@@ -273,10 +289,10 @@ print("\nApplying LoRA adapters...")
 
 # LoRA configuration
 lora_config = {
-    'rank': 16,
-    'alpha': 32.0,
-    'dropout': 0.1,
-    'target_modules': ['q_proj', 'v_proj', 'k_proj', 'out_proj']  # Attention modules
+    "rank": 16,
+    "alpha": 32.0,
+    "dropout": 0.1,
+    "target_modules": ["q_proj", "v_proj", "k_proj", "out_proj"],  # Attention modules
 }
 
 # Freeze all parameters first
@@ -286,10 +302,10 @@ for param in model.parameters():
 # Apply LoRA to attention modules
 adapted_count = apply_lora_to_model(
     model,
-    target_modules=lora_config['target_modules'],
-    rank=lora_config['rank'],
-    alpha=lora_config['alpha'],
-    dropout=lora_config['dropout']
+    target_modules=lora_config["target_modules"],
+    rank=lora_config["rank"],
+    alpha=lora_config["alpha"],
+    dropout=lora_config["dropout"],
 )
 
 # Unfreeze the classification head
@@ -300,13 +316,17 @@ print(f"\nApplied LoRA to {adapted_count} modules")
 print_parameter_stats(model, "LoRA Adapted V-JEPA 2")
 
 # Setup transforms
-train_transforms = v2.Compose([
-    v2.RandomResizedCrop((processor.crop_size["height"], processor.crop_size["width"])),
-    v2.RandomHorizontalFlip(),
-])
-eval_transforms = v2.Compose([
-    v2.CenterCrop((processor.crop_size["height"], processor.crop_size["width"]))
-])
+train_transforms = v2.Compose(
+    [
+        v2.RandomResizedCrop(
+            (processor.crop_size["height"], processor.crop_size["width"])
+        ),
+        v2.RandomHorizontalFlip(),
+    ]
+)
+eval_transforms = v2.Compose(
+    [v2.CenterCrop((processor.crop_size["height"], processor.crop_size["width"]))]
+)
 
 # Setup data loaders
 batch_size = 1
@@ -316,7 +336,11 @@ train_loader = DataLoader(
     train_ds,
     batch_size=batch_size,
     shuffle=True,
-    collate_fn=partial(collate_fn, frames_per_clip=model.config.frames_per_clip, transforms=train_transforms),
+    collate_fn=partial(
+        collate_fn,
+        frames_per_clip=model.config.frames_per_clip,
+        transforms=train_transforms,
+    ),
     num_workers=num_workers,
     pin_memory=True,
 )
@@ -324,7 +348,11 @@ val_loader = DataLoader(
     val_ds,
     batch_size=batch_size,
     shuffle=False,
-    collate_fn=partial(collate_fn, frames_per_clip=model.config.frames_per_clip, transforms=eval_transforms),
+    collate_fn=partial(
+        collate_fn,
+        frames_per_clip=model.config.frames_per_clip,
+        transforms=eval_transforms,
+    ),
     num_workers=num_workers,
     pin_memory=True,
 )
@@ -332,15 +360,19 @@ test_loader = DataLoader(
     test_ds,
     batch_size=batch_size,
     shuffle=False,
-    collate_fn=partial(collate_fn, frames_per_clip=model.config.frames_per_clip, transforms=eval_transforms),
+    collate_fn=partial(
+        collate_fn,
+        frames_per_clip=model.config.frames_per_clip,
+        transforms=eval_transforms,
+    ),
     num_workers=num_workers,
     pin_memory=True,
 )
 
 # ## Training Setup
 
-from torch.utils.tensorboard import SummaryWriter
 writer = SummaryWriter("runs/vjepa2_lora_finetune")
+
 
 def evaluate(loader, model, processor, device):
     """Compute accuracy over a dataset."""
@@ -355,6 +387,7 @@ def evaluate(loader, model, processor, device):
             correct += (preds == labels).sum().item()
             total += labels.size(0)
     return correct / total if total > 0 else 0.0
+
 
 # Optimizer - only train LoRA parameters and classification head
 trainable_params = [p for p in model.parameters() if p.requires_grad]
@@ -373,14 +406,19 @@ print(f"Gradient accumulation steps: {accumulation_steps}")
 
 # Store metrics for comparison
 training_metrics = {
-    'epochs': [],
-    'train_loss': [],
-    'val_acc': [],
-    'trainable_params': count_parameters(model)[1],
-    'total_params': count_parameters(model)[0]
+    "epochs": [],
+    "train_loss": [],
+    "val_acc": [],
+    "trainable_params": count_parameters(model)[1],
+    "total_params": count_parameters(model)[0],
 }
 
+# Start timing
+total_start_time = time.time()
+print(f"Starting LoRA training at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
 for epoch in range(1, num_epochs + 1):
+    epoch_start_time = time.time()
     model.train()
     running_loss = 0.0
     optimizer.zero_grad()
@@ -399,30 +437,45 @@ for epoch in range(1, num_epochs + 1):
             optimizer.step()
             optimizer.zero_grad()
             print(f"Epoch {epoch} Step {step}: Accumulated Loss = {running_loss:.4f}")
-            writer.add_scalar("Train Loss", running_loss, epoch * len(train_loader) + step)
+            writer.add_scalar(
+                "Train Loss", running_loss, epoch * len(train_loader) + step
+            )
             epoch_losses.append(running_loss)
             running_loss = 0.0
 
     # End of epoch evaluation
     val_acc = evaluate(val_loader, model, processor, model.device)
+    epoch_end_time = time.time()
+    epoch_duration = epoch_end_time - epoch_start_time
     print(f"Epoch {epoch} Validation Accuracy: {val_acc:.4f}")
+    print(f"Epoch {epoch} Duration: {epoch_duration:.2f} seconds")
     writer.add_scalar("Val Acc", val_acc, epoch * len(train_loader))
 
     # Store metrics
-    training_metrics['epochs'].append(epoch)
-    training_metrics['train_loss'].append(sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0)
-    training_metrics['val_acc'].append(val_acc)
+    training_metrics["epochs"].append(epoch)
+    training_metrics["train_loss"].append(
+        sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0
+    )
+    training_metrics["val_acc"].append(val_acc)
 
 # Final test evaluation
 test_acc = evaluate(test_loader, model, processor, model.device)
+total_end_time = time.time()
+total_duration = total_end_time - total_start_time
+
 print(f"\nFinal Test Accuracy: {test_acc:.4f}")
+print(
+    f"Total LoRA Training Time: {total_duration:.2f} seconds ({total_duration/60:.2f} minutes)"
+)
+print(f"LoRA training finished at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
 writer.add_scalar("Final Test Acc", test_acc, num_epochs * len(train_loader))
 
 # Save metrics
-training_metrics['final_test_acc'] = test_acc
+training_metrics["final_test_acc"] = test_acc
+training_metrics["total_training_time"] = total_duration
 
-import json
-with open('lora_training_metrics.json', 'w') as f:
+with open("lora_training_metrics.json", "w") as f:
     json.dump(training_metrics, f, indent=2)
 
 writer.close()
@@ -437,5 +490,7 @@ print_parameter_stats(model, "Final LoRA Adapted Model")
 # processor.save_pretrained("./vjepa2-lora-ucf101")
 
 print("\nAdapter-based fine-tuning demonstration completed!")
-print(f"Memory efficiency: Used only {count_parameters(model)[1]:,} trainable parameters")
+print(
+    f"Memory efficiency: Used only {count_parameters(model)[1]:,} trainable parameters"
+)
 print(f"vs {55_000_000:,}+ parameters in full fine-tuning (estimated)")
