@@ -1,0 +1,441 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# # V-JEPA 2 Adapter-Based Fine-tuning
+#
+# This notebook demonstrates adapter-based fine-tuning of V-JEPA 2 using LoRA (Low-Rank Adaptation).
+# Adapter tuning allows us to fine-tune large models with significantly fewer trainable parameters,
+# making it more memory efficient and faster to train while achieving comparable performance.
+
+import torch
+print("Torch:", torch.__version__)
+from torchcodec.decoders import VideoDecoder
+
+import torch.nn as nn
+import torch.nn.functional as F
+from typing import Optional, Tuple
+import math
+
+# Device Setup
+if torch.cuda.is_available():
+    device = "cuda"
+elif torch.backends.mps.is_available():
+    device = "mps"
+else:
+    device = "cpu"
+print(f"Using device: {device}")
+
+# ## LoRA (Low-Rank Adaptation) Implementation
+
+class LoRALayer(nn.Module):
+    """
+    LoRA (Low-Rank Adaptation) layer that can be applied to any linear layer.
+    This implementation follows the original LoRA paper: https://arxiv.org/abs/2106.09685
+    """
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        rank: int = 4,
+        alpha: float = 1.0,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        self.rank = rank
+        self.alpha = alpha
+        self.scaling = alpha / rank
+
+        # LoRA matrices: W = W_0 + (B * A) * scaling
+        self.lora_A = nn.Linear(in_features, rank, bias=False)
+        self.lora_B = nn.Linear(rank, out_features, bias=False)
+        self.dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
+
+        # Initialize LoRA matrices
+        nn.init.kaiming_uniform_(self.lora_A.weight, a=math.sqrt(5))
+        nn.init.zeros_(self.lora_B.weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply LoRA transformation: x @ (A^T @ B^T) * scaling"""
+        return self.lora_B(self.dropout(self.lora_A(x))) * self.scaling
+
+
+class AdaptedLinear(nn.Module):
+    """
+    Linear layer with LoRA adaptation.
+    During training, both original weights (frozen) and LoRA weights are used.
+    """
+    def __init__(
+        self,
+        original_linear: nn.Linear,
+        rank: int = 4,
+        alpha: float = 1.0,
+        dropout: float = 0.0,
+    ):
+        super().__init__()
+        self.original_linear = original_linear
+        self.lora = LoRALayer(
+            original_linear.in_features,
+            original_linear.out_features,
+            rank=rank,
+            alpha=alpha,
+            dropout=dropout,
+        )
+
+        # Move LoRA to same device as original linear layer
+        self.lora = self.lora.to(original_linear.weight.device)
+
+        # Freeze original weights
+        for param in self.original_linear.parameters():
+            param.requires_grad = False
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Forward pass combining original linear layer with LoRA adaptation"""
+        return self.original_linear(x) + self.lora(x)
+
+
+def apply_lora_to_model(
+    model: nn.Module,
+    target_modules: list = None,
+    rank: int = 4,
+    alpha: float = 1.0,
+    dropout: float = 0.0,
+) -> int:
+    """
+    Apply LoRA adapters to specified modules in the model.
+
+    Args:
+        model: The model to adapt
+        target_modules: List of module names to adapt (e.g., ['query', 'value'])
+        rank: LoRA rank
+        alpha: LoRA alpha parameter
+        dropout: Dropout rate for LoRA layers
+
+    Returns:
+        Number of adapted modules
+    """
+    if target_modules is None:
+        target_modules = ['q_proj', 'v_proj', 'k_proj', 'out_proj']  # Common attention module names
+
+    adapted_count = 0
+
+    def replace_linear_with_lora(module, name):
+        nonlocal adapted_count
+        for child_name, child_module in module.named_children():
+            if isinstance(child_module, nn.Linear) and any(target in child_name for target in target_modules):
+                # Replace with LoRA adapted version
+                adapted_linear = AdaptedLinear(
+                    child_module,
+                    rank=rank,
+                    alpha=alpha,
+                    dropout=dropout,
+                )
+                setattr(module, child_name, adapted_linear)
+                adapted_count += 1
+                print(f"Applied LoRA to: {name}.{child_name}")
+            else:
+                replace_linear_with_lora(child_module, f"{name}.{child_name}")
+
+    replace_linear_with_lora(model, "model")
+    return adapted_count
+
+
+def count_parameters(model: nn.Module) -> Tuple[int, int]:
+    """
+    Count total and trainable parameters in the model.
+
+    Returns:
+        Tuple of (total_params, trainable_params)
+    """
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return total_params, trainable_params
+
+
+def print_parameter_stats(model: nn.Module, model_name: str = "Model"):
+    """Print parameter statistics for the model"""
+    total, trainable = count_parameters(model)
+    print(f"\n{model_name} Parameter Statistics:")
+    print(f"  Total parameters: {total:,}")
+    print(f"  Trainable parameters: {trainable:,}")
+    print(f"  Percentage trainable: {100 * trainable / total:.2f}%")
+    print(f"  Memory reduction: {100 * (1 - trainable / total):.2f}%")
+
+
+# ## Data Loading (Same as original fine-tuning)
+
+from huggingface_hub import hf_hub_download
+import tarfile
+import pathlib
+
+# Download and extract dataset
+fpath = hf_hub_download(repo_id="sayakpaul/ucf101-subset", filename="UCF101_subset.tar.gz", repo_type="dataset")
+
+with tarfile.open(fpath) as t:
+    t.extractall(".", filter='data')
+
+dataset_root_path = pathlib.Path("UCF101_subset")
+all_video_file_paths = list(dataset_root_path.glob("**/*.avi"))
+
+# Split data
+train_video_file_paths = []
+val_video_file_paths = []
+test_video_file_paths = []
+
+for video_file_path in all_video_file_paths:
+    video_parts = video_file_path.parts
+    if "train" in video_parts:
+        train_video_file_paths.append(video_file_path)
+    elif "val" in video_parts:
+        val_video_file_paths.append(video_file_path)
+    elif "test" in video_parts:
+        test_video_file_paths.append(video_file_path)
+    else:
+        raise ValueError(f"Unknown video part: {video_parts}")
+
+video_count_train = len(train_video_file_paths)
+video_count_val = len(val_video_file_paths)
+video_count_test = len(test_video_file_paths)
+video_total = video_count_train + video_count_val + video_count_test
+print(f"Total videos: {video_total}")
+
+# Create label mappings
+class_labels = {path.parts[2] for path in all_video_file_paths}
+label2id = {label: i for i, label in enumerate(class_labels)}
+id2label = {i: label for label, i in label2id.items()}
+
+print(f"Number of classes: {len(class_labels)}")
+
+# ## Dataset and DataLoader Setup
+
+from torch.utils.data import DataLoader, Dataset
+from torchcodec.samplers import clips_at_random_indices
+from torchvision.transforms import v2
+from functools import partial
+
+class CustomVideoDataset(Dataset):
+    def __init__(self, video_file_paths, label2id):
+        self.video_file_paths = video_file_paths
+        self.label2id = label2id
+
+    def __len__(self):
+        return len(self.video_file_paths)
+
+    def __getitem__(self, idx):
+        video_path = self.video_file_paths[idx]
+        label = video_path.parts[2]
+        decoder = VideoDecoder(video_path)
+        return decoder, self.label2id[label]
+
+
+def collate_fn(samples, frames_per_clip, transforms):
+    """Sample clips and apply transforms to a batch."""
+    clips, labels = [], []
+    for decoder, lbl in samples:
+        clip = clips_at_random_indices(
+            decoder,
+            num_clips=1,
+            num_frames_per_clip=frames_per_clip,
+            num_indices_between_frames=3,
+        ).data
+        clips.append(clip)
+        labels.append(lbl)
+
+    videos = torch.cat(clips, dim=0)
+    videos = transforms(videos)
+    return videos, torch.tensor(labels)
+
+
+# Create datasets
+train_ds = CustomVideoDataset(train_video_file_paths, label2id)
+val_ds = CustomVideoDataset(val_video_file_paths, label2id)
+test_ds = CustomVideoDataset(test_video_file_paths, label2id)
+
+# ## Model Setup with LoRA Adapters
+
+from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
+
+# Load model and processor
+model_name = "facebook/vjepa2-vitl-fpc16-256-ssv2"
+processor = VJEPA2VideoProcessor.from_pretrained(model_name)
+model = VJEPA2ForVideoClassification.from_pretrained(
+    model_name,
+    torch_dtype=torch.float32,
+    label2id=label2id,
+    id2label=id2label,
+    ignore_mismatched_sizes=True,
+).to(device)
+
+print("Original model parameter stats:")
+print_parameter_stats(model, "Original V-JEPA 2")
+
+# Apply LoRA adapters
+print("\nApplying LoRA adapters...")
+
+# LoRA configuration
+lora_config = {
+    'rank': 16,
+    'alpha': 32.0,
+    'dropout': 0.1,
+    'target_modules': ['q_proj', 'v_proj', 'k_proj', 'out_proj']  # Attention modules
+}
+
+# Freeze all parameters first
+for param in model.parameters():
+    param.requires_grad = False
+
+# Apply LoRA to attention modules
+adapted_count = apply_lora_to_model(
+    model,
+    target_modules=lora_config['target_modules'],
+    rank=lora_config['rank'],
+    alpha=lora_config['alpha'],
+    dropout=lora_config['dropout']
+)
+
+# Unfreeze the classification head
+for param in model.classifier.parameters():
+    param.requires_grad = True
+
+print(f"\nApplied LoRA to {adapted_count} modules")
+print_parameter_stats(model, "LoRA Adapted V-JEPA 2")
+
+# Setup transforms
+train_transforms = v2.Compose([
+    v2.RandomResizedCrop((processor.crop_size["height"], processor.crop_size["width"])),
+    v2.RandomHorizontalFlip(),
+])
+eval_transforms = v2.Compose([
+    v2.CenterCrop((processor.crop_size["height"], processor.crop_size["width"]))
+])
+
+# Setup data loaders
+batch_size = 1
+num_workers = 0
+
+train_loader = DataLoader(
+    train_ds,
+    batch_size=batch_size,
+    shuffle=True,
+    collate_fn=partial(collate_fn, frames_per_clip=model.config.frames_per_clip, transforms=train_transforms),
+    num_workers=num_workers,
+    pin_memory=True,
+)
+val_loader = DataLoader(
+    val_ds,
+    batch_size=batch_size,
+    shuffle=False,
+    collate_fn=partial(collate_fn, frames_per_clip=model.config.frames_per_clip, transforms=eval_transforms),
+    num_workers=num_workers,
+    pin_memory=True,
+)
+test_loader = DataLoader(
+    test_ds,
+    batch_size=batch_size,
+    shuffle=False,
+    collate_fn=partial(collate_fn, frames_per_clip=model.config.frames_per_clip, transforms=eval_transforms),
+    num_workers=num_workers,
+    pin_memory=True,
+)
+
+# ## Training Setup
+
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter("runs/vjepa2_lora_finetune")
+
+def evaluate(loader, model, processor, device):
+    """Compute accuracy over a dataset."""
+    model.eval()
+    correct, total = 0, 0
+    with torch.no_grad():
+        for vids, labels in loader:
+            inputs = processor(vids, return_tensors="pt").to(device)
+            labels = labels.to(device)
+            logits = model(**inputs).logits
+            preds = logits.argmax(-1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+    return correct / total if total > 0 else 0.0
+
+# Optimizer - only train LoRA parameters and classification head
+trainable_params = [p for p in model.parameters() if p.requires_grad]
+optimizer = torch.optim.AdamW(trainable_params, lr=2e-4, weight_decay=0.01)
+
+print(f"\nTraining {len(trainable_params)} parameter groups")
+print(f"Learning rate: 2e-4 (higher than full fine-tuning due to fewer parameters)")
+
+# ## Training Loop
+
+num_epochs = 5  # Same as original fine-tuning
+accumulation_steps = 4
+
+print(f"\nStarting LoRA fine-tuning for {num_epochs} epochs...")
+print(f"Gradient accumulation steps: {accumulation_steps}")
+
+# Store metrics for comparison
+training_metrics = {
+    'epochs': [],
+    'train_loss': [],
+    'val_acc': [],
+    'trainable_params': count_parameters(model)[1],
+    'total_params': count_parameters(model)[0]
+}
+
+for epoch in range(1, num_epochs + 1):
+    model.train()
+    running_loss = 0.0
+    optimizer.zero_grad()
+
+    epoch_losses = []
+
+    for step, (vids, labels) in enumerate(train_loader, start=1):
+        inputs = processor(vids, return_tensors="pt").to(model.device)
+        labels = labels.to(model.device)
+        outputs = model(**inputs, labels=labels)
+        loss = outputs.loss / accumulation_steps
+        loss.backward()
+        running_loss += loss.item()
+
+        if step % accumulation_steps == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+            print(f"Epoch {epoch} Step {step}: Accumulated Loss = {running_loss:.4f}")
+            writer.add_scalar("Train Loss", running_loss, epoch * len(train_loader) + step)
+            epoch_losses.append(running_loss)
+            running_loss = 0.0
+
+    # End of epoch evaluation
+    val_acc = evaluate(val_loader, model, processor, model.device)
+    print(f"Epoch {epoch} Validation Accuracy: {val_acc:.4f}")
+    writer.add_scalar("Val Acc", val_acc, epoch * len(train_loader))
+
+    # Store metrics
+    training_metrics['epochs'].append(epoch)
+    training_metrics['train_loss'].append(sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0)
+    training_metrics['val_acc'].append(val_acc)
+
+# Final test evaluation
+test_acc = evaluate(test_loader, model, processor, model.device)
+print(f"\nFinal Test Accuracy: {test_acc:.4f}")
+writer.add_scalar("Final Test Acc", test_acc, num_epochs * len(train_loader))
+
+# Save metrics
+training_metrics['final_test_acc'] = test_acc
+
+import json
+with open('lora_training_metrics.json', 'w') as f:
+    json.dump(training_metrics, f, indent=2)
+
+writer.close()
+
+print(f"\nLoRA fine-tuning completed!")
+print_parameter_stats(model, "Final LoRA Adapted Model")
+
+# ## Save Model (Optional)
+
+# Uncomment to save the model
+# model.save_pretrained("./vjepa2-lora-ucf101")
+# processor.save_pretrained("./vjepa2-lora-ucf101")
+
+print("\nAdapter-based fine-tuning demonstration completed!")
+print(f"Memory efficiency: Used only {count_parameters(model)[1]:,} trainable parameters")
+print(f"vs {55_000_000:,}+ parameters in full fine-tuning (estimated)")

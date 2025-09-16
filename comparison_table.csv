@@ -1,0 +1,11 @@
+Metric,Final-layer Fine-tuning,LoRA Adapter Tuning
+Training Method,All layers trainable,Only adapters + classifier
+Total Parameters,"375,317,898","375,809,418"
+Trainable Parameters,"375,317,898","501,770"
+Trainable %,100.00%,0.13%
+Memory Reduction,0.00%,99.87%
+Final Test Accuracy,0.9400,0.9600
+Best Val Accuracy,0.9700,1.0000
+Final Train Loss,1.1000,0.1926
+Training Efficiency,Baseline,High (99.87% fewer params)
+Parameter Efficiency,Low,Very High

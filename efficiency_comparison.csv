@@ -1,0 +1,3 @@
+Method,Trainable Parameters (M),Final Test Accuracy,Performance per Million Params
+Final-layer Fine-tuning,375.317898,0.94,0.002504543495018721
+LoRA Adapter,0.50177,0.96,1.913227175797676
