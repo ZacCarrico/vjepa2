@@ -19,6 +19,7 @@
 # We need to install accelerate, datasets and transformers' main branch.
 
 import pathlib
+import random
 import tarfile
 import time
 from functools import partial
@@ -42,6 +43,17 @@ from transformers import (
 print("Torch:", torch.__version__)
 
 
+def set_seed(seed: int = 42):
+    """Set seed for reproducibility"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
 # ## Simple Inference
 #
 # **Device Setup**
@@ -55,6 +67,9 @@ print("Torch:", torch.__version__)
 #
 # You can initialize the V-JEPA 2 with ViT Giant checkpoint as follows. Feel free to replace the ID with the one you want to use. Here's [the model collection](https://huggingface.co/collections/facebook/v-jepa-2-6841bad8413014e185b497a6).
 
+
+# Set seed for reproducibility
+set_seed(42)
 
 # Auto-detect best available device: CUDA > MPS > CPU
 if torch.cuda.is_available():

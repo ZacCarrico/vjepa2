@@ -10,11 +10,13 @@
 import json
 import math
 import pathlib
+import random
 import tarfile
 import time
 from functools import partial
 from typing import Optional, Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,6 +29,21 @@ from torchvision.transforms import v2
 from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
 
 print("Torch:", torch.__version__)
+
+
+def set_seed(seed: int = 42):
+    """Set seed for reproducibility"""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+# Set seed for reproducibility
+set_seed(42)
 
 # Device Setup
 if torch.cuda.is_available():
