@@ -34,35 +34,25 @@ vjepa2/
 │   ├── vjepa2_finetuning.py                       # Final layer only fine-tuning
 │   └── lora_vjepa2_finetuning.py                  # LoRA + final layer fine-tuning
 │
-├── 📦 COMMON MODULES (Refactored Code)
+├── 📦 COMMON MODULES
 │   └── common/
 │       ├── utils.py                               # Shared utilities (seed, device, parameter counting)
 │       ├── data.py                                # Dataset classes, data loading, transforms
 │       └── training.py                            # Evaluation functions, TensorBoard setup
 │
 ├── 📊 ANALYSIS & RESULTS
-│   ├── compare_results.py                         # Comprehensive comparison analysis script
-│   ├── comparison_table.csv                       # Detailed metrics comparison table
-│   ├── efficiency_comparison.csv                  # Parameter efficiency analysis
-│   ├── training_comparison.png                    # Training curves visualization
-│   └── efficiency_analysis.png                    # Parameter efficiency plots
+│   └── analysis/
+│       ├── compare_results.py                     # Comprehensive comparison analysis script
+│       ├── comparison_table.csv                   # Detailed metrics comparison table
+│       ├── efficiency_comparison.csv              # Parameter efficiency analysis
+│       ├── training_comparison.png                # Training curves visualization
+│       └── efficiency_analysis.png                # Parameter efficiency plots
 │
 ├── 📝 TRAINING OUTPUTS
-│   ├── final_layer_training_output_refactored.txt # Complete training log (final layer)
-│   ├── lora_training_output_refactored.txt        # Complete training log (LoRA)
-│   └── lora_training_metrics.json                 # Structured LoRA metrics
-│
-├── 🎯 DATASET
-│   └── UCF101_subset/                             # UCF-101 subset (10 classes, 405 videos)
-│       ├── train/                                 # Training videos by class
-│       ├── val/                                   # Validation videos by class
-│       └── test/                                  # Test videos by class
-│
-├── 📈 TENSORBOARD LOGS
-│   └── runs/                                      # TensorBoard training logs
-│       ├── vjepa2_finetune/                       # Final layer training logs
-│       └── vjepa2_lora_finetune/                  # LoRA training logs
-│
+│   └── training_outputs/
+│       ├── final_layer_training_output_refactored.txt # Complete training log (final layer)
+│       ├── lora_training_output_refactored.txt    # Complete training log (LoRA)
+│       └── lora_training_metrics.json             # Structured LoRA metrics
 └── 🔧 CONFIGURATION
     ├── .gitignore                                 # Git ignore patterns
     └── .venv/                                     # Python virtual environment
@@ -93,13 +83,14 @@ python vjepa2_finetuning.py
 python lora_vjepa2_finetuning.py
 
 # Generate comparison analysis
-python compare_results.py
+python analysis/compare_results.py
 ```
 
 ### 3. **View Results**
-- **Training curves**: `training_comparison.png`
-- **Parameter efficiency**: `efficiency_analysis.png`
-- **Detailed metrics**: `comparison_table.csv`
+- **Training curves**: `analysis/training_comparison.png`
+- **Parameter efficiency**: `analysis/efficiency_analysis.png`
+- **Detailed metrics**: `analysis/comparison_table.csv`
+- **Training logs**: `training_outputs/`
 - **TensorBoard logs**: `tensorboard --logdir runs`
 
 ## 🎛️ **Configuration Options**
