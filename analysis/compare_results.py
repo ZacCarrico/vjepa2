@@ -103,11 +103,11 @@ def load_metrics():
     """Load training metrics from both approaches"""
 
     # Parse actual final-layer fine-tuning results with timing
-    final_layer_file = Path("final_layer_training_output_refactored.txt")
+    final_layer_file = Path("../training_outputs/final_layer_training_output_refactored.txt")
     if not final_layer_file.exists():
-        final_layer_file = Path("final_layer_training_output_with_timing_seed42.txt")
+        final_layer_file = Path("../training_outputs/final_layer_training_output_with_timing_seed42.txt")
         if not final_layer_file.exists():
-            final_layer_file = Path("final_layer_training_output.txt")
+            final_layer_file = Path("../final_layer_training_output.txt")
             if not final_layer_file.exists():
                 raise FileNotFoundError("final_layer_training_output.txt not found")
 
@@ -128,9 +128,9 @@ def load_metrics():
     print("✅ Loaded actual final-layer fine-tuning metrics with timing")
 
     # Load actual LoRA metrics with timing
-    lora_file = Path("lora_training_metrics.json")
-    lora_output_file = Path("lora_training_output_refactored.txt")
-    lora_fallback_file = Path("lora_training_output_with_timing_seed42.txt")
+    lora_file = Path("../training_outputs/lora_training_metrics.json")
+    lora_output_file = Path("../training_outputs/lora_training_output_refactored.txt")
+    lora_fallback_file = Path("../training_outputs/lora_training_output_with_timing_seed42.txt")
 
     if lora_output_file.exists():
         lora_parsed = parse_training_output(lora_output_file)
@@ -173,7 +173,7 @@ def load_metrics():
         print("✅ Loaded actual LoRA training metrics from JSON")
     else:
         raise FileNotFoundError(
-            "LoRA training data not found (need lora_training_metrics.json, lora_training_output_refactored.txt, or lora_training_output_with_timing_seed42.txt)"
+            "LoRA training data not found (need ../training_outputs/lora_training_metrics.json, ../training_outputs/lora_training_output_refactored.txt, or ../training_outputs/lora_training_output_with_timing_seed42.txt)"
         )
 
     return full_finetuning_metrics, lora_metrics

@@ -1,0 +1,448 @@
+Some weights of VJEPA2ForVideoClassification were not initialized from the model checkpoint at facebook/vjepa2-vitl-fpc16-256-ssv2 and are newly initialized because the shapes did not match:
+- classifier.bias: found shape torch.Size([174]) in the checkpoint and torch.Size([10]) in the model instantiated
+- classifier.weight: found shape torch.Size([174, 1024]) in the checkpoint and torch.Size([10, 1024]) in the model instantiated
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Torch: 2.6.0
+Using device: mps
+Total videos: 405
+Number of classes: 10
+Original model parameter stats:
+
+Original V-JEPA 2 Parameter Statistics:
+  Total parameters: 375,317,898
+  Trainable parameters: 375,317,898
+  Percentage trainable: 100.00%
+  Memory reduction: 0.00%
+
+Applying LoRA adapters...
+Applied LoRA to: model.pooler.cross_attention_layer.cross_attn.k_proj
+Applied LoRA to: model.pooler.cross_attention_layer.cross_attn.v_proj
+Applied LoRA to: model.pooler.cross_attention_layer.cross_attn.q_proj
+Applied LoRA to: model.pooler.self_attention_layers.0.self_attn.k_proj
+Applied LoRA to: model.pooler.self_attention_layers.0.self_attn.v_proj
+Applied LoRA to: model.pooler.self_attention_layers.0.self_attn.q_proj
+Applied LoRA to: model.pooler.self_attention_layers.0.self_attn.out_proj
+Applied LoRA to: model.pooler.self_attention_layers.1.self_attn.k_proj
+Applied LoRA to: model.pooler.self_attention_layers.1.self_attn.v_proj
+Applied LoRA to: model.pooler.self_attention_layers.1.self_attn.q_proj
+Applied LoRA to: model.pooler.self_attention_layers.1.self_attn.out_proj
+Applied LoRA to: model.pooler.self_attention_layers.2.self_attn.k_proj
+Applied LoRA to: model.pooler.self_attention_layers.2.self_attn.v_proj
+Applied LoRA to: model.pooler.self_attention_layers.2.self_attn.q_proj
+Applied LoRA to: model.pooler.self_attention_layers.2.self_attn.out_proj
+
+Applied LoRA to 15 modules
+
+LoRA Adapted V-JEPA 2 Parameter Statistics:
+  Total parameters: 375,809,418
+  Trainable parameters: 501,770
+  Percentage trainable: 0.13%
+  Memory reduction: 99.87%
+
+Training 32 parameter groups
+Learning rate: 2e-4 (higher than full fine-tuning due to fewer parameters)
+
+Starting LoRA fine-tuning for 5 epochs...
+Gradient accumulation steps: 4
+Starting LoRA training at: 2025-09-16 17:51:38
+Epoch 1 Step 4: Accumulated Loss = 2.0362
+Epoch 1 Step 8: Accumulated Loss = 2.4331
+Epoch 1 Step 12: Accumulated Loss = 1.8535
+Epoch 1 Step 16: Accumulated Loss = 2.1892
+Epoch 1 Step 20: Accumulated Loss = 2.3139
+Epoch 1 Step 24: Accumulated Loss = 2.3570
+Epoch 1 Step 28: Accumulated Loss = 2.2733
+Epoch 1 Step 32: Accumulated Loss = 2.1323
+Epoch 1 Step 36: Accumulated Loss = 2.5668
+Epoch 1 Step 40: Accumulated Loss = 2.4615
+Epoch 1 Step 44: Accumulated Loss = 2.3668
+Epoch 1 Step 48: Accumulated Loss = 2.3036
+Epoch 1 Step 52: Accumulated Loss = 2.0327
+Epoch 1 Step 56: Accumulated Loss = 1.8196
+Epoch 1 Step 60: Accumulated Loss = 1.9432
+Epoch 1 Step 64: Accumulated Loss = 1.9443
+Epoch 1 Step 68: Accumulated Loss = 2.0530
+Epoch 1 Step 72: Accumulated Loss = 2.2382
+Epoch 1 Step 76: Accumulated Loss = 2.4414
+Epoch 1 Step 80: Accumulated Loss = 1.9887
+Epoch 1 Step 84: Accumulated Loss = 2.1240
+Epoch 1 Step 88: Accumulated Loss = 2.0167
+Epoch 1 Step 92: Accumulated Loss = 1.6446
+Epoch 1 Step 96: Accumulated Loss = 2.1553
+Epoch 1 Step 100: Accumulated Loss = 2.2536
+Epoch 1 Step 104: Accumulated Loss = 2.6470
+Epoch 1 Step 108: Accumulated Loss = 1.5430
+Epoch 1 Step 112: Accumulated Loss = 1.4234
+Epoch 1 Step 116: Accumulated Loss = 1.9762
+Epoch 1 Step 120: Accumulated Loss = 1.8601
+Epoch 1 Step 124: Accumulated Loss = 1.8804
+Epoch 1 Step 128: Accumulated Loss = 1.9412
+Epoch 1 Step 132: Accumulated Loss = 2.0140
+Epoch 1 Step 136: Accumulated Loss = 1.9001
+Epoch 1 Step 140: Accumulated Loss = 2.0644
+Epoch 1 Step 144: Accumulated Loss = 1.8280
+Epoch 1 Step 148: Accumulated Loss = 1.3585
+Epoch 1 Step 152: Accumulated Loss = 1.4868
+Epoch 1 Step 156: Accumulated Loss = 1.3696
+Epoch 1 Step 160: Accumulated Loss = 1.5959
+Epoch 1 Step 164: Accumulated Loss = 2.1395
+Epoch 1 Step 168: Accumulated Loss = 1.7283
+Epoch 1 Step 172: Accumulated Loss = 1.7117
+Epoch 1 Step 176: Accumulated Loss = 1.9507
+Epoch 1 Step 180: Accumulated Loss = 1.6056
+Epoch 1 Step 184: Accumulated Loss = 1.8997
+Epoch 1 Step 188: Accumulated Loss = 1.5179
+Epoch 1 Step 192: Accumulated Loss = 1.6362
+Epoch 1 Step 196: Accumulated Loss = 1.4302
+Epoch 1 Step 200: Accumulated Loss = 1.5874
+Epoch 1 Step 204: Accumulated Loss = 1.6702
+Epoch 1 Step 208: Accumulated Loss = 1.2271
+Epoch 1 Step 212: Accumulated Loss = 1.2766
+Epoch 1 Step 216: Accumulated Loss = 1.0644
+Epoch 1 Step 220: Accumulated Loss = 1.1370
+Epoch 1 Step 224: Accumulated Loss = 1.4519
+Epoch 1 Step 228: Accumulated Loss = 1.6987
+Epoch 1 Step 232: Accumulated Loss = 1.4196
+Epoch 1 Step 236: Accumulated Loss = 1.0247
+Epoch 1 Step 240: Accumulated Loss = 1.3260
+Epoch 1 Step 244: Accumulated Loss = 1.3380
+Epoch 1 Step 248: Accumulated Loss = 1.1941
+Epoch 1 Step 252: Accumulated Loss = 1.4479
+Epoch 1 Step 256: Accumulated Loss = 0.8232
+Epoch 1 Step 260: Accumulated Loss = 1.4227
+Epoch 1 Step 264: Accumulated Loss = 1.5396
+Epoch 1 Step 268: Accumulated Loss = 0.8647
+Epoch 1 Step 272: Accumulated Loss = 1.3433
+Epoch 1 Step 276: Accumulated Loss = 1.8576
+Epoch 1 Step 280: Accumulated Loss = 1.6663
+Epoch 1 Step 284: Accumulated Loss = 1.1207
+Epoch 1 Step 288: Accumulated Loss = 1.0893
+Epoch 1 Step 292: Accumulated Loss = 1.2964
+Epoch 1 Step 296: Accumulated Loss = 1.2200
+Epoch 1 Step 300: Accumulated Loss = 0.9757
+Epoch 1 Validation Accuracy: 0.8000
+Epoch 1 Duration: 350.02 seconds
+Epoch 2 Step 4: Accumulated Loss = 1.5003
+Epoch 2 Step 8: Accumulated Loss = 1.5251
+Epoch 2 Step 12: Accumulated Loss = 1.3919
+Epoch 2 Step 16: Accumulated Loss = 0.9905
+Epoch 2 Step 20: Accumulated Loss = 1.1422
+Epoch 2 Step 24: Accumulated Loss = 1.1420
+Epoch 2 Step 28: Accumulated Loss = 0.8686
+Epoch 2 Step 32: Accumulated Loss = 0.4080
+Epoch 2 Step 36: Accumulated Loss = 0.9304
+Epoch 2 Step 40: Accumulated Loss = 1.1664
+Epoch 2 Step 44: Accumulated Loss = 0.8892
+Epoch 2 Step 48: Accumulated Loss = 0.6228
+Epoch 2 Step 52: Accumulated Loss = 1.0062
+Epoch 2 Step 56: Accumulated Loss = 0.6164
+Epoch 2 Step 60: Accumulated Loss = 0.7044
+Epoch 2 Step 64: Accumulated Loss = 1.1836
+Epoch 2 Step 68: Accumulated Loss = 0.7141
+Epoch 2 Step 72: Accumulated Loss = 0.6806
+Epoch 2 Step 76: Accumulated Loss = 0.9645
+Epoch 2 Step 80: Accumulated Loss = 0.9402
+Epoch 2 Step 84: Accumulated Loss = 0.6854
+Epoch 2 Step 88: Accumulated Loss = 1.0011
+Epoch 2 Step 92: Accumulated Loss = 0.7403
+Epoch 2 Step 96: Accumulated Loss = 0.9309
+Epoch 2 Step 100: Accumulated Loss = 0.5589
+Epoch 2 Step 104: Accumulated Loss = 1.4309
+Epoch 2 Step 108: Accumulated Loss = 1.1604
+Epoch 2 Step 112: Accumulated Loss = 0.6340
+Epoch 2 Step 116: Accumulated Loss = 0.5986
+Epoch 2 Step 120: Accumulated Loss = 0.9926
+Epoch 2 Step 124: Accumulated Loss = 0.6511
+Epoch 2 Step 128: Accumulated Loss = 0.7908
+Epoch 2 Step 132: Accumulated Loss = 0.7786
+Epoch 2 Step 136: Accumulated Loss = 0.1790
+Epoch 2 Step 140: Accumulated Loss = 0.6357
+Epoch 2 Step 144: Accumulated Loss = 0.4249
+Epoch 2 Step 148: Accumulated Loss = 1.0703
+Epoch 2 Step 152: Accumulated Loss = 0.2893
+Epoch 2 Step 156: Accumulated Loss = 1.1057
+Epoch 2 Step 160: Accumulated Loss = 0.3374
+Epoch 2 Step 164: Accumulated Loss = 1.2539
+Epoch 2 Step 168: Accumulated Loss = 0.4051
+Epoch 2 Step 172: Accumulated Loss = 0.9177
+Epoch 2 Step 176: Accumulated Loss = 0.8978
+Epoch 2 Step 180: Accumulated Loss = 0.8604
+Epoch 2 Step 184: Accumulated Loss = 1.0674
+Epoch 2 Step 188: Accumulated Loss = 1.0238
+Epoch 2 Step 192: Accumulated Loss = 0.5870
+Epoch 2 Step 196: Accumulated Loss = 0.5802
+Epoch 2 Step 200: Accumulated Loss = 0.9622
+Epoch 2 Step 204: Accumulated Loss = 0.6027
+Epoch 2 Step 208: Accumulated Loss = 0.6686
+Epoch 2 Step 212: Accumulated Loss = 0.9345
+Epoch 2 Step 216: Accumulated Loss = 0.3217
+Epoch 2 Step 220: Accumulated Loss = 0.3926
+Epoch 2 Step 224: Accumulated Loss = 0.5383
+Epoch 2 Step 228: Accumulated Loss = 1.0414
+Epoch 2 Step 232: Accumulated Loss = 0.4183
+Epoch 2 Step 236: Accumulated Loss = 0.6668
+Epoch 2 Step 240: Accumulated Loss = 0.3210
+Epoch 2 Step 244: Accumulated Loss = 0.3405
+Epoch 2 Step 248: Accumulated Loss = 0.3000
+Epoch 2 Step 252: Accumulated Loss = 0.4374
+Epoch 2 Step 256: Accumulated Loss = 0.6586
+Epoch 2 Step 260: Accumulated Loss = 0.8947
+Epoch 2 Step 264: Accumulated Loss = 0.2440
+Epoch 2 Step 268: Accumulated Loss = 0.0498
+Epoch 2 Step 272: Accumulated Loss = 0.5934
+Epoch 2 Step 276: Accumulated Loss = 0.4345
+Epoch 2 Step 280: Accumulated Loss = 0.5864
+Epoch 2 Step 284: Accumulated Loss = 0.1562
+Epoch 2 Step 288: Accumulated Loss = 0.3859
+Epoch 2 Step 292: Accumulated Loss = 0.8409
+Epoch 2 Step 296: Accumulated Loss = 0.1738
+Epoch 2 Step 300: Accumulated Loss = 0.3895
+Epoch 2 Validation Accuracy: 0.9333
+Epoch 2 Duration: 367.57 seconds
+Epoch 3 Step 4: Accumulated Loss = 0.6474
+Epoch 3 Step 8: Accumulated Loss = 1.1619
+Epoch 3 Step 12: Accumulated Loss = 0.6533
+Epoch 3 Step 16: Accumulated Loss = 0.4632
+Epoch 3 Step 20: Accumulated Loss = 0.3296
+Epoch 3 Step 24: Accumulated Loss = 0.5526
+Epoch 3 Step 28: Accumulated Loss = 0.2204
+Epoch 3 Step 32: Accumulated Loss = 0.2185
+Epoch 3 Step 36: Accumulated Loss = 1.0985
+Epoch 3 Step 40: Accumulated Loss = 0.3324
+Epoch 3 Step 44: Accumulated Loss = 0.2431
+Epoch 3 Step 48: Accumulated Loss = 0.3718
+Epoch 3 Step 52: Accumulated Loss = 0.3224
+Epoch 3 Step 56: Accumulated Loss = 0.4745
+Epoch 3 Step 60: Accumulated Loss = 0.3366
+Epoch 3 Step 64: Accumulated Loss = 0.2336
+Epoch 3 Step 68: Accumulated Loss = 0.1128
+Epoch 3 Step 72: Accumulated Loss = 0.7970
+Epoch 3 Step 76: Accumulated Loss = 0.2367
+Epoch 3 Step 80: Accumulated Loss = 0.6352
+Epoch 3 Step 84: Accumulated Loss = 0.5725
+Epoch 3 Step 88: Accumulated Loss = 0.5676
+Epoch 3 Step 92: Accumulated Loss = 1.8591
+Epoch 3 Step 96: Accumulated Loss = 0.5600
+Epoch 3 Step 100: Accumulated Loss = 0.1168
+Epoch 3 Step 104: Accumulated Loss = 0.7583
+Epoch 3 Step 108: Accumulated Loss = 0.2248
+Epoch 3 Step 112: Accumulated Loss = 0.6726
+Epoch 3 Step 116: Accumulated Loss = 0.2415
+Epoch 3 Step 120: Accumulated Loss = 0.2429
+Epoch 3 Step 124: Accumulated Loss = 0.5769
+Epoch 3 Step 128: Accumulated Loss = 0.5270
+Epoch 3 Step 132: Accumulated Loss = 0.4459
+Epoch 3 Step 136: Accumulated Loss = 0.6818
+Epoch 3 Step 140: Accumulated Loss = 0.7339
+Epoch 3 Step 144: Accumulated Loss = 0.3776
+Epoch 3 Step 148: Accumulated Loss = 0.3060
+Epoch 3 Step 152: Accumulated Loss = 0.1107
+Epoch 3 Step 156: Accumulated Loss = 0.6718
+Epoch 3 Step 160: Accumulated Loss = 0.3689
+Epoch 3 Step 164: Accumulated Loss = 0.3130
+Epoch 3 Step 168: Accumulated Loss = 0.4207
+Epoch 3 Step 172: Accumulated Loss = 0.1400
+Epoch 3 Step 176: Accumulated Loss = 0.7357
+Epoch 3 Step 180: Accumulated Loss = 0.0721
+Epoch 3 Step 184: Accumulated Loss = 0.1440
+Epoch 3 Step 188: Accumulated Loss = 0.1433
+Epoch 3 Step 192: Accumulated Loss = 0.6550
+Epoch 3 Step 196: Accumulated Loss = 0.2338
+Epoch 3 Step 200: Accumulated Loss = 0.1347
+Epoch 3 Step 204: Accumulated Loss = 0.2205
+Epoch 3 Step 208: Accumulated Loss = 0.3928
+Epoch 3 Step 212: Accumulated Loss = 0.1194
+Epoch 3 Step 216: Accumulated Loss = 0.0976
+Epoch 3 Step 220: Accumulated Loss = 0.1265
+Epoch 3 Step 224: Accumulated Loss = 0.4594
+Epoch 3 Step 228: Accumulated Loss = 0.5252
+Epoch 3 Step 232: Accumulated Loss = 0.4604
+Epoch 3 Step 236: Accumulated Loss = 0.5322
+Epoch 3 Step 240: Accumulated Loss = 0.6074
+Epoch 3 Step 244: Accumulated Loss = 0.3060
+Epoch 3 Step 248: Accumulated Loss = 0.6339
+Epoch 3 Step 252: Accumulated Loss = 0.0729
+Epoch 3 Step 256: Accumulated Loss = 0.2780
+Epoch 3 Step 260: Accumulated Loss = 0.3704
+Epoch 3 Step 264: Accumulated Loss = 0.3265
+Epoch 3 Step 268: Accumulated Loss = 0.3017
+Epoch 3 Step 272: Accumulated Loss = 0.1237
+Epoch 3 Step 276: Accumulated Loss = 0.2491
+Epoch 3 Step 280: Accumulated Loss = 0.2237
+Epoch 3 Step 284: Accumulated Loss = 0.7465
+Epoch 3 Step 288: Accumulated Loss = 0.5025
+Epoch 3 Step 292: Accumulated Loss = 0.1800
+Epoch 3 Step 296: Accumulated Loss = 0.2356
+Epoch 3 Step 300: Accumulated Loss = 0.2159
+Epoch 3 Validation Accuracy: 1.0000
+Epoch 3 Duration: 365.83 seconds
+Epoch 4 Step 4: Accumulated Loss = 0.2644
+Epoch 4 Step 8: Accumulated Loss = 0.2804
+Epoch 4 Step 12: Accumulated Loss = 0.1932
+Epoch 4 Step 16: Accumulated Loss = 0.1634
+Epoch 4 Step 20: Accumulated Loss = 0.2306
+Epoch 4 Step 24: Accumulated Loss = 0.2309
+Epoch 4 Step 28: Accumulated Loss = 0.1460
+Epoch 4 Step 32: Accumulated Loss = 0.4502
+Epoch 4 Step 36: Accumulated Loss = 0.6256
+Epoch 4 Step 40: Accumulated Loss = 0.2514
+Epoch 4 Step 44: Accumulated Loss = 0.2470
+Epoch 4 Step 48: Accumulated Loss = 0.0726
+Epoch 4 Step 52: Accumulated Loss = 0.4979
+Epoch 4 Step 56: Accumulated Loss = 0.0443
+Epoch 4 Step 60: Accumulated Loss = 0.5282
+Epoch 4 Step 64: Accumulated Loss = 0.0802
+Epoch 4 Step 68: Accumulated Loss = 0.1051
+Epoch 4 Step 72: Accumulated Loss = 0.0586
+Epoch 4 Step 76: Accumulated Loss = 0.3654
+Epoch 4 Step 80: Accumulated Loss = 0.1146
+Epoch 4 Step 84: Accumulated Loss = 0.2196
+Epoch 4 Step 88: Accumulated Loss = 0.4294
+Epoch 4 Step 92: Accumulated Loss = 0.9358
+Epoch 4 Step 96: Accumulated Loss = 0.0391
+Epoch 4 Step 100: Accumulated Loss = 0.1333
+Epoch 4 Step 104: Accumulated Loss = 0.0702
+Epoch 4 Step 108: Accumulated Loss = 0.1649
+Epoch 4 Step 112: Accumulated Loss = 0.0316
+Epoch 4 Step 116: Accumulated Loss = 0.2224
+Epoch 4 Step 120: Accumulated Loss = 0.7022
+Epoch 4 Step 124: Accumulated Loss = 0.1648
+Epoch 4 Step 128: Accumulated Loss = 0.4639
+Epoch 4 Step 132: Accumulated Loss = 0.2610
+Epoch 4 Step 136: Accumulated Loss = 0.1501
+Epoch 4 Step 140: Accumulated Loss = 0.0606
+Epoch 4 Step 144: Accumulated Loss = 0.3645
+Epoch 4 Step 148: Accumulated Loss = 0.2948
+Epoch 4 Step 152: Accumulated Loss = 0.0903
+Epoch 4 Step 156: Accumulated Loss = 0.3755
+Epoch 4 Step 160: Accumulated Loss = 0.0367
+Epoch 4 Step 164: Accumulated Loss = 0.1205
+Epoch 4 Step 168: Accumulated Loss = 0.1646
+Epoch 4 Step 172: Accumulated Loss = 0.2305
+Epoch 4 Step 176: Accumulated Loss = 0.4191
+Epoch 4 Step 180: Accumulated Loss = 0.0096
+Epoch 4 Step 184: Accumulated Loss = 0.1259
+Epoch 4 Step 188: Accumulated Loss = 0.2630
+Epoch 4 Step 192: Accumulated Loss = 0.6002
+Epoch 4 Step 196: Accumulated Loss = 0.5164
+Epoch 4 Step 200: Accumulated Loss = 0.2274
+Epoch 4 Step 204: Accumulated Loss = 0.0509
+Epoch 4 Step 208: Accumulated Loss = 0.1587
+Epoch 4 Step 212: Accumulated Loss = 0.0835
+Epoch 4 Step 216: Accumulated Loss = 0.0685
+Epoch 4 Step 220: Accumulated Loss = 0.0438
+Epoch 4 Step 224: Accumulated Loss = 0.0468
+Epoch 4 Step 228: Accumulated Loss = 0.1034
+Epoch 4 Step 232: Accumulated Loss = 0.5567
+Epoch 4 Step 236: Accumulated Loss = 0.0260
+Epoch 4 Step 240: Accumulated Loss = 0.0983
+Epoch 4 Step 244: Accumulated Loss = 0.2037
+Epoch 4 Step 248: Accumulated Loss = 0.0837
+Epoch 4 Step 252: Accumulated Loss = 0.3177
+Epoch 4 Step 256: Accumulated Loss = 0.1567
+Epoch 4 Step 260: Accumulated Loss = 0.6235
+Epoch 4 Step 264: Accumulated Loss = 0.0531
+Epoch 4 Step 268: Accumulated Loss = 0.4807
+Epoch 4 Step 272: Accumulated Loss = 0.3455
+Epoch 4 Step 276: Accumulated Loss = 0.3837
+Epoch 4 Step 280: Accumulated Loss = 0.4436
+Epoch 4 Step 284: Accumulated Loss = 0.0988
+Epoch 4 Step 288: Accumulated Loss = 0.3753
+Epoch 4 Step 292: Accumulated Loss = 0.3057
+Epoch 4 Step 296: Accumulated Loss = 0.3295
+Epoch 4 Step 300: Accumulated Loss = 0.4329
+Epoch 4 Validation Accuracy: 0.9667
+Epoch 4 Duration: 364.58 seconds
+Epoch 5 Step 4: Accumulated Loss = 0.0525
+Epoch 5 Step 8: Accumulated Loss = 0.0983
+Epoch 5 Step 12: Accumulated Loss = 0.0590
+Epoch 5 Step 16: Accumulated Loss = 0.3647
+Epoch 5 Step 20: Accumulated Loss = 0.1791
+Epoch 5 Step 24: Accumulated Loss = 0.1721
+Epoch 5 Step 28: Accumulated Loss = 0.3339
+Epoch 5 Step 32: Accumulated Loss = 0.5446
+Epoch 5 Step 36: Accumulated Loss = 0.4670
+Epoch 5 Step 40: Accumulated Loss = 0.1408
+Epoch 5 Step 44: Accumulated Loss = 0.0355
+Epoch 5 Step 48: Accumulated Loss = 0.2385
+Epoch 5 Step 52: Accumulated Loss = 0.5898
+Epoch 5 Step 56: Accumulated Loss = 0.7891
+Epoch 5 Step 60: Accumulated Loss = 0.1057
+Epoch 5 Step 64: Accumulated Loss = 0.3683
+Epoch 5 Step 68: Accumulated Loss = 0.1899
+Epoch 5 Step 72: Accumulated Loss = 0.4920
+Epoch 5 Step 76: Accumulated Loss = 0.0285
+Epoch 5 Step 80: Accumulated Loss = 0.0630
+Epoch 5 Step 84: Accumulated Loss = 0.2673
+Epoch 5 Step 88: Accumulated Loss = 0.2798
+Epoch 5 Step 92: Accumulated Loss = 0.1235
+Epoch 5 Step 96: Accumulated Loss = 0.1695
+Epoch 5 Step 100: Accumulated Loss = 0.1502
+Epoch 5 Step 104: Accumulated Loss = 0.2430
+Epoch 5 Step 108: Accumulated Loss = 0.1626
+Epoch 5 Step 112: Accumulated Loss = 0.0061
+Epoch 5 Step 116: Accumulated Loss = 0.1849
+Epoch 5 Step 120: Accumulated Loss = 0.9419
+Epoch 5 Step 124: Accumulated Loss = 0.0206
+Epoch 5 Step 128: Accumulated Loss = 0.1659
+Epoch 5 Step 132: Accumulated Loss = 0.1824
+Epoch 5 Step 136: Accumulated Loss = 0.0516
+Epoch 5 Step 140: Accumulated Loss = 0.6840
+Epoch 5 Step 144: Accumulated Loss = 0.2750
+Epoch 5 Step 148: Accumulated Loss = 0.1636
+Epoch 5 Step 152: Accumulated Loss = 0.2610
+Epoch 5 Step 156: Accumulated Loss = 0.0895
+Epoch 5 Step 160: Accumulated Loss = 0.0777
+Epoch 5 Step 164: Accumulated Loss = 0.0996
+Epoch 5 Step 168: Accumulated Loss = 0.5371
+Epoch 5 Step 172: Accumulated Loss = 0.2568
+Epoch 5 Step 176: Accumulated Loss = 0.0584
+Epoch 5 Step 180: Accumulated Loss = 0.0256
+Epoch 5 Step 184: Accumulated Loss = 0.1640
+Epoch 5 Step 188: Accumulated Loss = 0.2212
+Epoch 5 Step 192: Accumulated Loss = 0.0391
+Epoch 5 Step 196: Accumulated Loss = 0.0933
+Epoch 5 Step 200: Accumulated Loss = 0.1787
+Epoch 5 Step 204: Accumulated Loss = 0.0758
+Epoch 5 Step 208: Accumulated Loss = 0.0431
+Epoch 5 Step 212: Accumulated Loss = 0.1604
+Epoch 5 Step 216: Accumulated Loss = 0.0315
+Epoch 5 Step 220: Accumulated Loss = 0.0602
+Epoch 5 Step 224: Accumulated Loss = 0.2084
+Epoch 5 Step 228: Accumulated Loss = 0.3358
+Epoch 5 Step 232: Accumulated Loss = 0.4008
+Epoch 5 Step 236: Accumulated Loss = 0.1756
+Epoch 5 Step 240: Accumulated Loss = 0.3528
+Epoch 5 Step 244: Accumulated Loss = 0.0836
+Epoch 5 Step 248: Accumulated Loss = 0.2660
+Epoch 5 Step 252: Accumulated Loss = 0.2272
+Epoch 5 Step 256: Accumulated Loss = 0.2444
+Epoch 5 Step 260: Accumulated Loss = 0.0459
+Epoch 5 Step 264: Accumulated Loss = 0.3484
+Epoch 5 Step 268: Accumulated Loss = 0.6749
+Epoch 5 Step 272: Accumulated Loss = 0.1907
+Epoch 5 Step 276: Accumulated Loss = 0.1258
+Epoch 5 Step 280: Accumulated Loss = 0.2679
+Epoch 5 Step 284: Accumulated Loss = 0.3584
+Epoch 5 Step 288: Accumulated Loss = 0.1794
+Epoch 5 Step 292: Accumulated Loss = 0.0212
+Epoch 5 Step 296: Accumulated Loss = 0.3229
+Epoch 5 Step 300: Accumulated Loss = 0.0203
+Epoch 5 Validation Accuracy: 0.9333
+Epoch 5 Duration: 365.99 seconds
+
+Final Test Accuracy: 1.0000
+Total LoRA Training Time: 1883.52 seconds (31.39 minutes)
+LoRA training finished at: 2025-09-16 18:23:01
+
+LoRA fine-tuning completed!
+
+Final LoRA Adapted Model Parameter Statistics:
+  Total parameters: 375,809,418
+  Trainable parameters: 501,770
+  Percentage trainable: 0.13%
+  Memory reduction: 99.87%
+
+Adapter-based fine-tuning demonstration completed!
+Memory efficiency: Used only 501,770 trainable parameters
+vs 55,000,000+ parameters in full fine-tuning (estimated)

@@ -18,21 +18,13 @@
 
 # We need to install accelerate, datasets and transformers' main branch.
 
-import pathlib
-import random
-import tarfile
 import time
-from functools import partial
 
 import numpy as np
 import torch
-from huggingface_hub import hf_hub_download
 from PIL import Image
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.tensorboard import SummaryWriter
 from torchcodec.decoders import VideoDecoder
 from torchcodec.samplers import clips_at_random_indices
-from torchvision.transforms import v2
 from transformers import (
     AutoModel,
     AutoVideoProcessor,
@@ -40,18 +32,18 @@ from transformers import (
     VJEPA2VideoProcessor,
 )
 
+from common.data import (
+    CustomVideoDataset,
+    create_data_loaders,
+    create_label_mappings,
+    setup_ucf101_dataset,
+)
+from common.training import evaluate, setup_tensorboard
+from common.utils import get_device, set_seed
+
 print("Torch:", torch.__version__)
 
 
-def set_seed(seed: int = 42):
-    """Set seed for reproducibility"""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
 
 # ## Simple Inference
@@ -69,15 +61,10 @@ def set_seed(seed: int = 42):
 
 
 # Set seed for reproducibility
-set_seed(42)
+set_seed(1)
 
-# Auto-detect best available device: CUDA > MPS > CPU
-if torch.cuda.is_available():
-    device = "cuda"
-elif torch.backends.mps.is_available():
-    device = "mps"
-else:
-    device = "cpu"
+# Auto-detect best available device
+device = get_device()
 print(f"Using device: {device}")
 
 model = AutoModel.from_pretrained("facebook/vjepa2-vitg-fpc64-384").to(device)
@@ -125,31 +112,9 @@ print(model.config.id2label[predicted_label])
 
 # ## Data Preprocessing for Fine-tuning
 
-# Let's load the dataset first. UCF-101 consists of 101 different actions covering from blowing candles to playing violin. We will use [a smaller subset of UCF-101](https://huggingface.co/datasets/sayakpaul/ucf101-subset).
-fpath = hf_hub_download(
-    repo_id="sayakpaul/ucf101-subset",
-    filename="UCF101_subset.tar.gz",
-    repo_type="dataset",
-)
-with tarfile.open(fpath) as t:
-    t.extractall(".")
-dataset_root_path = pathlib.Path("UCF101_subset")
+# Load UCF-101 dataset
+train_video_file_paths, val_video_file_paths, test_video_file_paths, dataset_root_path = setup_ucf101_dataset()
 all_video_file_paths = list(dataset_root_path.glob("**/*.avi"))
-
-# We gather different splits as lists to later create the `DataLoader` for training.
-train_video_file_paths = []
-val_video_file_paths = []
-test_video_file_paths = []
-for video_file_path in all_video_file_paths:
-    video_parts = video_file_path.parts
-    if "train" in video_parts:
-        train_video_file_paths.append(video_file_path)
-    elif "val" in video_parts:
-        val_video_file_paths.append(video_file_path)
-    elif "test" in video_parts:
-        test_video_file_paths.append(video_file_path)
-    else:
-        raise ValueError(f"Unknown video part: {video_parts}")
 
 video_count_train = len(train_video_file_paths)
 video_count_val = len(val_video_file_paths)
@@ -157,26 +122,11 @@ video_count_test = len(test_video_file_paths)
 video_total = video_count_train + video_count_val + video_count_test
 print(f"Total videos: {video_total}")
 
-# We need to keep a class label to human-readable label mapping and number of classes to later initialize our model.
-class_labels = {path.parts[2] for path in all_video_file_paths}
-label2id = {label: i for i, label in enumerate(class_labels)}
-id2label = {i: label for label, i in label2id.items()}
+# Create label mappings
+label2id, id2label = create_label_mappings(all_video_file_paths)
 
 
 # We will create a `CustomVideoDataset` class and initialize our train/test/validation sets for DataLoader.
-class CustomVideoDataset(Dataset):
-    def __init__(self, video_file_paths, label2id):
-        self.video_file_paths = video_file_paths
-        self.label2id = label2id
-
-    def __len__(self):
-        return len(self.video_file_paths)
-
-    def __getitem__(self, idx):
-        video_path = self.video_file_paths[idx]
-        label = video_path.parts[2]
-        decoder = VideoDecoder(video_path)
-        return decoder, self.label2id[label]
 
 
 train_ds = CustomVideoDataset(train_video_file_paths, label2id)
@@ -187,104 +137,14 @@ test_ds = CustomVideoDataset(test_video_file_paths, label2id)
 # V-JEPA 2 is an embedding model. To fine-tune it, we need to load the weights with a randomly initialized task-specific head put on top of them. For this, we can use `VJEPA2ForVideoClassification` class. During the initialization, we should pass in the mapping between the class labels and human readable labels, so the classification head has the same number of classes, and directly outputs human-readable labels with the confidence scores.
 # On a separate note, if you want to only use embeddings, you can use `AutoModel` to do so. This can be used for e.g. video-to-video retrieval or calculating similarity between videos.
 # We can now define augmentations and create the data collator. This notebook is made for tutorial purposes, so we keep the augmentations minimal. We can finally initialize the DataLoader afterwards.
-def collate_fn(samples, frames_per_clip, transforms):
-    """Sample clips and apply transforms to a batch."""
-    clips, labels = [], []
-    for decoder, lbl in samples:
-        clip = clips_at_random_indices(
-            decoder,
-            num_clips=1,
-            num_frames_per_clip=frames_per_clip,
-            num_indices_between_frames=3,
-        ).data
-        clips.append(clip)
-        labels.append(lbl)
-
-    videos = torch.cat(clips, dim=0)
-    videos = transforms(videos)
-    return videos, torch.tensor(labels)
-
-
-train_transforms = v2.Compose(
-    [
-        v2.RandomResizedCrop(
-            (processor.crop_size["height"], processor.crop_size["width"])
-        ),
-        v2.RandomHorizontalFlip(),
-    ]
-)
-eval_transforms = v2.Compose(
-    [v2.CenterCrop((processor.crop_size["height"], processor.crop_size["width"]))]
-)
-batch_size = 1
-num_workers = 0  # Changed from 4 to 0 to fix multiprocessing error
-
-# DataLoaders
-train_loader = DataLoader(
-    train_ds,
-    batch_size=batch_size,
-    shuffle=True,
-    collate_fn=partial(
-        collate_fn,
-        frames_per_clip=model.config.frames_per_clip,
-        transforms=train_transforms,
-    ),
-    num_workers=num_workers,
-    pin_memory=True,
-)
-val_loader = DataLoader(
-    val_ds,
-    batch_size=batch_size,
-    shuffle=False,
-    collate_fn=partial(
-        collate_fn,
-        frames_per_clip=model.config.frames_per_clip,
-        transforms=eval_transforms,
-    ),
-    num_workers=num_workers,
-    pin_memory=True,
-)
-test_loader = DataLoader(
-    test_ds,
-    batch_size=batch_size,
-    shuffle=False,
-    collate_fn=partial(
-        collate_fn,
-        frames_per_clip=model.config.frames_per_clip,
-        transforms=eval_transforms,
-    ),
-    num_workers=num_workers,
-    pin_memory=True,
-)
+# DataLoaders will be created after model initialization
 
 # ## Model Training
 
-# Before training, we can login to HF Hub (to later push the model) and setup tensorboard.
-# from huggingface_hub import login
-# login()  # Commented out for non-interactive execution
-
-writer = SummaryWriter("runs/vjepa2_finetune")
+# Setup tensorboard
+writer = setup_tensorboard("runs/vjepa2_finetune")
 
 
-# Here's a small evaluation function we use so we evaluate the model training and log the number to tensorboard.
-def evaluate(
-    loader: DataLoader,
-    model: VJEPA2ForVideoClassification,
-    processor: VJEPA2VideoProcessor,
-    device: torch.device,
-) -> float:
-    """Compute accuracy over a dataset."""
-    model.eval()
-    correct, total = 0, 0
-    with torch.no_grad():
-        for vids, labels in loader:
-            inputs = processor(vids, return_tensors="pt").to(device)
-            labels = labels.to(device)
-            logits = model(**inputs).logits
-            preds = logits.argmax(-1)
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-    return correct / total if total > 0 else 0.0
 
 
 # Finally, write the training loop!
@@ -303,6 +163,13 @@ model = VJEPA2ForVideoClassification.from_pretrained(
     ignore_mismatched_sizes=True,
 ).to(device)
 
+# Create DataLoaders using common module
+batch_size = 1
+num_workers = 0  # Changed from 4 to 0 to fix multiprocessing error
+
+train_loader, val_loader, test_loader = create_data_loaders(
+    train_ds, val_ds, test_ds, processor, batch_size, num_workers, model.config.frames_per_clip
+)
 
 gradient_accumulation_steps = 4
 for param in model.vjepa2.parameters():

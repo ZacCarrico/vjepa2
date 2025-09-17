@@ -9,49 +9,34 @@
 
 import json
 import math
-import pathlib
-import random
-import tarfile
 import time
-from functools import partial
 from typing import Optional, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from huggingface_hub import hf_hub_download
-from torch.utils.data import DataLoader, Dataset
-from torch.utils.tensorboard import SummaryWriter
-from torchcodec.decoders import VideoDecoder
-from torchcodec.samplers import clips_at_random_indices
-from torchvision.transforms import v2
 from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
+
+from common.data import (
+    CustomVideoDataset,
+    create_data_loaders,
+    create_label_mappings,
+    setup_ucf101_dataset,
+)
+from common.training import evaluate, setup_tensorboard
+from common.utils import count_parameters, get_device, print_parameter_stats, set_seed
 
 print("Torch:", torch.__version__)
 
 
-def set_seed(seed: int = 42):
-    """Set seed for reproducibility"""
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
 
 # Set seed for reproducibility
-set_seed(42)
+set_seed(1)
 
 # Device Setup
-if torch.cuda.is_available():
-    device = "cuda"
-elif torch.backends.mps.is_available():
-    device = "mps"
-else:
-    device = "cpu"
+device = get_device()
 print(f"Using device: {device}")
 
 # ## LoRA (Low-Rank Adaptation) Implementation
@@ -178,58 +163,13 @@ def apply_lora_to_model(
     return adapted_count
 
 
-def count_parameters(model: nn.Module) -> Tuple[int, int]:
-    """
-    Count total and trainable parameters in the model.
-
-    Returns:
-        Tuple of (total_params, trainable_params)
-    """
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    return total_params, trainable_params
-
-
-def print_parameter_stats(model: nn.Module, model_name: str = "Model"):
-    """Print parameter statistics for the model"""
-    total, trainable = count_parameters(model)
-    print(f"\n{model_name} Parameter Statistics:")
-    print(f"  Total parameters: {total:,}")
-    print(f"  Trainable parameters: {trainable:,}")
-    print(f"  Percentage trainable: {100 * trainable / total:.2f}%")
-    print(f"  Memory reduction: {100 * (1 - trainable / total):.2f}%")
 
 
 # ## Data Loading (Same as original fine-tuning)
 
-# Download and extract dataset
-fpath = hf_hub_download(
-    repo_id="sayakpaul/ucf101-subset",
-    filename="UCF101_subset.tar.gz",
-    repo_type="dataset",
-)
-
-with tarfile.open(fpath) as t:
-    t.extractall(".", filter="data")
-
-dataset_root_path = pathlib.Path("UCF101_subset")
+# Load UCF-101 dataset
+train_video_file_paths, val_video_file_paths, test_video_file_paths, dataset_root_path = setup_ucf101_dataset()
 all_video_file_paths = list(dataset_root_path.glob("**/*.avi"))
-
-# Split data
-train_video_file_paths = []
-val_video_file_paths = []
-test_video_file_paths = []
-
-for video_file_path in all_video_file_paths:
-    video_parts = video_file_path.parts
-    if "train" in video_parts:
-        train_video_file_paths.append(video_file_path)
-    elif "val" in video_parts:
-        val_video_file_paths.append(video_file_path)
-    elif "test" in video_parts:
-        test_video_file_paths.append(video_file_path)
-    else:
-        raise ValueError(f"Unknown video part: {video_parts}")
 
 video_count_train = len(train_video_file_paths)
 video_count_val = len(val_video_file_paths)
@@ -238,46 +178,13 @@ video_total = video_count_train + video_count_val + video_count_test
 print(f"Total videos: {video_total}")
 
 # Create label mappings
-class_labels = {path.parts[2] for path in all_video_file_paths}
-label2id = {label: i for i, label in enumerate(class_labels)}
-id2label = {i: label for label, i in label2id.items()}
+label2id, id2label = create_label_mappings(all_video_file_paths)
 
-print(f"Number of classes: {len(class_labels)}")
+print(f"Number of classes: {len(label2id)}")
 
 # ## Dataset and DataLoader Setup
 
 
-class CustomVideoDataset(Dataset):
-    def __init__(self, video_file_paths, label2id):
-        self.video_file_paths = video_file_paths
-        self.label2id = label2id
-
-    def __len__(self):
-        return len(self.video_file_paths)
-
-    def __getitem__(self, idx):
-        video_path = self.video_file_paths[idx]
-        label = video_path.parts[2]
-        decoder = VideoDecoder(video_path)
-        return decoder, self.label2id[label]
-
-
-def collate_fn(samples, frames_per_clip, transforms):
-    """Sample clips and apply transforms to a batch."""
-    clips, labels = [], []
-    for decoder, lbl in samples:
-        clip = clips_at_random_indices(
-            decoder,
-            num_clips=1,
-            num_frames_per_clip=frames_per_clip,
-            num_indices_between_frames=3,
-        ).data
-        clips.append(clip)
-        labels.append(lbl)
-
-    videos = torch.cat(clips, dim=0)
-    videos = transforms(videos)
-    return videos, torch.tensor(labels)
 
 
 # Create datasets
@@ -332,78 +239,19 @@ for param in model.classifier.parameters():
 print(f"\nApplied LoRA to {adapted_count} modules")
 print_parameter_stats(model, "LoRA Adapted V-JEPA 2")
 
-# Setup transforms
-train_transforms = v2.Compose(
-    [
-        v2.RandomResizedCrop(
-            (processor.crop_size["height"], processor.crop_size["width"])
-        ),
-        v2.RandomHorizontalFlip(),
-    ]
-)
-eval_transforms = v2.Compose(
-    [v2.CenterCrop((processor.crop_size["height"], processor.crop_size["width"]))]
-)
-
-# Setup data loaders
+# Create DataLoaders using common module
 batch_size = 1
 num_workers = 0
 
-train_loader = DataLoader(
-    train_ds,
-    batch_size=batch_size,
-    shuffle=True,
-    collate_fn=partial(
-        collate_fn,
-        frames_per_clip=model.config.frames_per_clip,
-        transforms=train_transforms,
-    ),
-    num_workers=num_workers,
-    pin_memory=True,
-)
-val_loader = DataLoader(
-    val_ds,
-    batch_size=batch_size,
-    shuffle=False,
-    collate_fn=partial(
-        collate_fn,
-        frames_per_clip=model.config.frames_per_clip,
-        transforms=eval_transforms,
-    ),
-    num_workers=num_workers,
-    pin_memory=True,
-)
-test_loader = DataLoader(
-    test_ds,
-    batch_size=batch_size,
-    shuffle=False,
-    collate_fn=partial(
-        collate_fn,
-        frames_per_clip=model.config.frames_per_clip,
-        transforms=eval_transforms,
-    ),
-    num_workers=num_workers,
-    pin_memory=True,
+train_loader, val_loader, test_loader = create_data_loaders(
+    train_ds, val_ds, test_ds, processor, batch_size, num_workers, model.config.frames_per_clip
 )
 
 # ## Training Setup
 
-writer = SummaryWriter("runs/vjepa2_lora_finetune")
+writer = setup_tensorboard("runs/vjepa2_lora_finetune")
 
 
-def evaluate(loader, model, processor, device):
-    """Compute accuracy over a dataset."""
-    model.eval()
-    correct, total = 0, 0
-    with torch.no_grad():
-        for vids, labels in loader:
-            inputs = processor(vids, return_tensors="pt").to(device)
-            labels = labels.to(device)
-            logits = model(**inputs).logits
-            preds = logits.argmax(-1)
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-    return correct / total if total > 0 else 0.0
 
 
 # Optimizer - only train LoRA parameters and classification head
