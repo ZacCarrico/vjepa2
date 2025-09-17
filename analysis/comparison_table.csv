@@ -1,0 +1,12 @@
+Metric,Final Layer Only,LoRA + Final Layer
+Training Method,"Backbone frozen, head only","Backbone frozen, LoRA + head"
+Total Parameters,"375,317,898","375,809,418"
+Trainable Parameters,"10,240","501,770"
+Trainable %,100.00%,0.13%
+Parameter Change,0.00%,4800.10%
+Final Test Accuracy,0.9733,1.0000
+Best Val Accuracy,0.9333,1.0000
+Final Train Loss,0.5771,0.2228
+Total Training Time,1890s (31.5m),1884s (31.4m)
+Training Efficiency,Baseline,High (+LoRA adapters)
+Parameter Efficiency,Low,Very High
