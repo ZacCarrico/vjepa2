@@ -1,3 +1,4 @@
+``` mermaid
 flowchart LR
     A[Raw Video Ingestion] --> B[Preprocessing Service]
     B -->|Decode & Normalize| C[Video Frames / Chunks]
@@ -12,3 +13,4 @@ flowchart LR
         C
         D
     end
+```
