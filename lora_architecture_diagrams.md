@@ -96,6 +96,32 @@ graph TD
     style G fill:#fff3e0
 ```
 
+### LoRA Mathematical Formulation
+
+The LoRA adaptation follows this equation:
+```
+h = W₀x + ΔWx = W₀x + BAx × (α/r)
+```
+
+Where:
+- `W₀` = Original pre-trained weight matrix (frozen)
+- `ΔW = BA` = Low-rank decomposition of weight update
+- `B` = LoRA B matrix (rank → out_features)
+- `A` = LoRA A matrix (in_features → rank)
+- `α` = LoRA alpha parameter (32.0)
+- `r` = LoRA rank (16)
+- `α/r` = scaling factor (2.0)
+
+### Matrix Dimensions Example
+For a typical attention projection layer in V-JEPA 2:
+```
+Input x:           [batch_size, seq_len, 1024]
+W₀ (frozen):       [1024, 1024]
+A matrix:          [1024, 16]     # in_features → rank
+B matrix:          [16, 1024]     # rank → out_features
+BA decomposition:  [1024, 1024]   # same as W₀
+```
+
 ## Classification Head Replacement (Without LoRA)
 ```mermaid
 graph TD
