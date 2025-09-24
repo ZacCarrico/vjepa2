@@ -7,9 +7,11 @@
 # Adapter tuning allows us to fine-tune large models with significantly fewer trainable parameters,
 # making it more memory efficient and faster to train while achieving comparable performance.
 
+import argparse
 import json
 import math
 import time
+from datetime import datetime
 from typing import Optional, Tuple
 
 import numpy as np
@@ -30,7 +32,30 @@ from common.utils import count_parameters, get_device, print_parameter_stats, se
 print("Torch:", torch.__version__)
 
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='V-JEPA 2 LoRA Fine-tuning')
+    parser.add_argument(
+        '--num_train_videos',
+        type=int,
+        default=None,
+        help='Number of training videos to use (default: use all available)'
+    )
+    return parser.parse_args()
 
+
+# Parse command line arguments
+args = parse_arguments()
+num_train_videos = args.num_train_videos
+
+# Create timestamp for output files
+timestamp = datetime.now().strftime("%y%m%d-%H:%M:%S")
+print(f"Training session timestamp: {timestamp}")
+
+if num_train_videos:
+    print(f"Using {num_train_videos} training videos")
+else:
+    print("Using all available training videos")
 
 # Set seed for reproducibility
 set_seed(1)
@@ -187,10 +212,18 @@ print(f"Number of classes: {len(label2id)}")
 
 
 
+# Limit training videos if specified
+if num_train_videos and num_train_videos < len(train_video_file_paths):
+    train_video_file_paths = train_video_file_paths[:num_train_videos]
+    print(f"Limited training videos to {len(train_video_file_paths)}")
+
 # Create datasets
 train_ds = CustomVideoDataset(train_video_file_paths, label2id)
 val_ds = CustomVideoDataset(val_video_file_paths, label2id)
 test_ds = CustomVideoDataset(test_video_file_paths, label2id)
+
+# Update video counts after potential limiting
+video_count_train = len(train_video_file_paths)
 
 # ## Model Setup with LoRA Adapters
 
@@ -249,7 +282,10 @@ train_loader, val_loader, test_loader = create_data_loaders(
 
 # ## Training Setup
 
-writer = setup_tensorboard("runs/vjepa2_lora_finetune")
+# Create output directory name with timestamp and video count
+output_suffix = f"{video_count_train}videos_{timestamp}"
+tensorboard_dir = f"runs/vjepa2_lora_finetune_{output_suffix}"
+writer = setup_tensorboard(tensorboard_dir)
 
 
 
@@ -271,12 +307,20 @@ print(f"Gradient accumulation steps: {accumulation_steps}")
 
 # Store metrics for comparison
 training_metrics = {
+    "timestamp": timestamp,
+    "num_train_videos": video_count_train,
+    "num_val_videos": video_count_val,
+    "num_test_videos": video_count_test,
     "epochs": [],
     "train_loss": [],
     "val_acc": [],
     "trainable_params": count_parameters(model)[1],
     "total_params": count_parameters(model)[0],
 }
+
+# Best model tracking
+best_val_acc = 0.0
+best_model_state = None
 
 # Start timing
 total_start_time = time.time()
@@ -316,6 +360,12 @@ for epoch in range(1, num_epochs + 1):
     print(f"Epoch {epoch} Duration: {epoch_duration:.2f} seconds")
     writer.add_scalar("Val Acc", val_acc, epoch * len(train_loader))
 
+    # Save best model based on validation accuracy
+    if val_acc > best_val_acc:
+        best_val_acc = val_acc
+        best_model_state = model.state_dict().copy()
+        print(f"New best validation accuracy: {best_val_acc:.4f} - saving model state")
+
     # Store metrics
     training_metrics["epochs"].append(epoch)
     training_metrics["train_loss"].append(
@@ -323,12 +373,20 @@ for epoch in range(1, num_epochs + 1):
     )
     training_metrics["val_acc"].append(val_acc)
 
+# Load best model for final test evaluation
+if best_model_state is not None:
+    print(f"\nLoading best model (validation accuracy: {best_val_acc:.4f}) for final test evaluation")
+    model.load_state_dict(best_model_state)
+else:
+    print(f"\nNo best model saved, using final epoch model for test evaluation")
+
 # Final test evaluation
 test_acc = evaluate(test_loader, model, processor, model.device)
 total_end_time = time.time()
 total_duration = total_end_time - total_start_time
 
 print(f"\nFinal Test Accuracy: {test_acc:.4f}")
+print(f"Best Validation Accuracy: {best_val_acc:.4f}")
 print(
     f"Total LoRA Training Time: {total_duration:.2f} seconds ({total_duration/60:.2f} minutes)"
 )
@@ -338,10 +396,16 @@ writer.add_scalar("Final Test Acc", test_acc, num_epochs * len(train_loader))
 
 # Save metrics
 training_metrics["final_test_acc"] = test_acc
+training_metrics["best_val_acc"] = best_val_acc
 training_metrics["total_training_time"] = total_duration
 
-with open("lora_training_metrics.json", "w") as f:
+# Save metrics with timestamp and video count in filename
+metrics_filename = f"lora_training_metrics_{output_suffix}.json"
+with open(metrics_filename, "w") as f:
     json.dump(training_metrics, f, indent=2)
+
+print(f"Training metrics saved to: {metrics_filename}")
+print(f"Tensorboard logs saved to: {tensorboard_dir}")
 
 writer.close()
 
@@ -350,11 +414,14 @@ print_parameter_stats(model, "Final LoRA Adapted Model")
 
 # ## Save Model (Optional)
 
-# Uncomment to save the model
-# model.save_pretrained("./vjepa2-lora-ucf101")
-# processor.save_pretrained("./vjepa2-lora-ucf101")
+# Uncomment to save the model with timestamp and video count
+model_save_dir = f"./vjepa2-lora-ucf101_{output_suffix}"
+# model.save_pretrained(model_save_dir)
+# processor.save_pretrained(model_save_dir)
 
 print("\nAdapter-based fine-tuning demonstration completed!")
+print(f"Training videos used: {video_count_train:,}")
+print(f"Training session: {timestamp}")
 print(
     f"Memory efficiency: Used only {count_parameters(model)[1]:,} trainable parameters"
 )

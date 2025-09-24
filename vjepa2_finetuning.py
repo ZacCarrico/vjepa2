@@ -183,6 +183,10 @@ optimizer = torch.optim.Adam(trainable, lr=1e-5)
 num_epochs = 5
 accumulation_steps = 4
 
+# Best model tracking
+best_val_acc = 0.0
+best_model_state = None
+
 # Start timing
 total_start_time = time.time()
 print(f"Starting training at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -214,6 +218,19 @@ for epoch in range(1, num_epochs + 1):
     print(f"Epoch {epoch} Duration: {epoch_duration:.2f} seconds")
     writer.add_scalar("Val Acc", val_acc, epoch * len(train_loader))  # Log loss
 
+    # Save best model based on validation accuracy
+    if val_acc > best_val_acc:
+        best_val_acc = val_acc
+        best_model_state = model.state_dict().copy()
+        print(f"New best validation accuracy: {best_val_acc:.4f} - saving model state")
+
+
+# Load best model for final test evaluation
+if best_model_state is not None:
+    print(f"\nLoading best model (validation accuracy: {best_val_acc:.4f}) for final test evaluation")
+    model.load_state_dict(best_model_state)
+else:
+    print(f"\nNo best model saved, using final epoch model for test evaluation")
 
 # Final test evaluation
 test_acc = evaluate(test_loader, model, processor, model.device)
@@ -221,6 +238,7 @@ total_end_time = time.time()
 total_duration = total_end_time - total_start_time
 
 print(f"Final Test Accuracy: {test_acc:.4f}")
+print(f"Best Validation Accuracy: {best_val_acc:.4f}")
 print(
     f"Total Training Time: {total_duration:.2f} seconds ({total_duration/60:.2f} minutes)"
 )
