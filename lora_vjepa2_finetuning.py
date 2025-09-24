@@ -278,6 +278,10 @@ training_metrics = {
     "total_params": count_parameters(model)[0],
 }
 
+# Best model tracking
+best_val_acc = 0.0
+best_model_state = None
+
 # Start timing
 total_start_time = time.time()
 print(f"Starting LoRA training at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -316,6 +320,12 @@ for epoch in range(1, num_epochs + 1):
     print(f"Epoch {epoch} Duration: {epoch_duration:.2f} seconds")
     writer.add_scalar("Val Acc", val_acc, epoch * len(train_loader))
 
+    # Save best model based on validation accuracy
+    if val_acc > best_val_acc:
+        best_val_acc = val_acc
+        best_model_state = model.state_dict().copy()
+        print(f"New best validation accuracy: {best_val_acc:.4f} - saving model state")
+
     # Store metrics
     training_metrics["epochs"].append(epoch)
     training_metrics["train_loss"].append(
@@ -323,12 +333,20 @@ for epoch in range(1, num_epochs + 1):
     )
     training_metrics["val_acc"].append(val_acc)
 
+# Load best model for final test evaluation
+if best_model_state is not None:
+    print(f"\nLoading best model (validation accuracy: {best_val_acc:.4f}) for final test evaluation")
+    model.load_state_dict(best_model_state)
+else:
+    print(f"\nNo best model saved, using final epoch model for test evaluation")
+
 # Final test evaluation
 test_acc = evaluate(test_loader, model, processor, model.device)
 total_end_time = time.time()
 total_duration = total_end_time - total_start_time
 
 print(f"\nFinal Test Accuracy: {test_acc:.4f}")
+print(f"Best Validation Accuracy: {best_val_acc:.4f}")
 print(
     f"Total LoRA Training Time: {total_duration:.2f} seconds ({total_duration/60:.2f} minutes)"
 )
@@ -338,6 +356,7 @@ writer.add_scalar("Final Test Acc", test_acc, num_epochs * len(train_loader))
 
 # Save metrics
 training_metrics["final_test_acc"] = test_acc
+training_metrics["best_val_acc"] = best_val_acc
 training_metrics["total_training_time"] = total_duration
 
 with open("lora_training_metrics.json", "w") as f:
