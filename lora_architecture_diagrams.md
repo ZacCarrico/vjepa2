@@ -5,9 +5,9 @@
 graph TD
     A[Input Video] --> B[V-JEPA 2 Encoder]
     B --> C[Attention Layers]
-    C --> D[q_proj Linear]
-    C --> E[k_proj Linear]
-    C --> F[v_proj Linear]
+    C --> D[query_proj Linear]
+    C --> E[key_proj Linear]
+    C --> F[value_proj Linear]
     C --> G[out_proj Linear]
     D --> H[Multi-Head Attention]
     E --> H
@@ -30,23 +30,23 @@ graph TD
 graph TD
     A[Input Video] --> B[V-JEPA 2 Encoder]
     B --> C[Attention Layers]
-    C --> D[AdaptedLinear q_proj]
-    C --> E[AdaptedLinear k_proj]
-    C --> F[AdaptedLinear v_proj]
+    C --> D[AdaptedLinear query_proj]
+    C --> E[AdaptedLinear key_proj]
+    C --> F[AdaptedLinear value_proj]
     C --> G[AdaptedLinear out_proj]
 
-    D --> D1[Original q_proj<br/>FROZEN]
-    D --> D2[LoRA q_proj<br/>TRAINABLE]
+    D --> D1[Original query_proj<br/>FROZEN]
+    D --> D2[LoRA query_proj<br/>TRAINABLE]
     D1 --> D3[+]
     D2 --> D3
 
-    E --> E1[Original k_proj<br/>FROZEN]
-    E --> E2[LoRA k_proj<br/>TRAINABLE]
+    E --> E1[Original key_proj<br/>FROZEN]
+    E --> E2[LoRA key_proj<br/>TRAINABLE]
     E1 --> E3[+]
     E2 --> E3
 
-    F --> F1[Original v_proj<br/>FROZEN]
-    F --> F2[LoRA v_proj<br/>TRAINABLE]
+    F --> F1[Original value_proj<br/>FROZEN]
+    F --> F2[LoRA value_proj<br/>TRAINABLE]
     F1 --> F3[+]
     F2 --> F3
 
@@ -112,7 +112,7 @@ graph TD
 ```
 
 ## Key Changes Summary
-- **216 LoRA modules** applied to attention layers (q_proj, k_proj, v_proj, out_proj)
+- **216 LoRA modules** applied to attention layers (query_proj, key_proj, value_proj, out_proj)
 - **Original attention weights frozen** (red boxes)
 - **LoRA adapters trainable** (green boxes) with rank=16, α=32.0
 - **Classification head replaced** and trainable for UCF-101 (101 classes vs original SSV2 174 classes)
