@@ -250,7 +250,7 @@ docker run --gpus all nvidia/cuda:11.8-runtime-ubuntu22.04 nvidia-smi
    gcloud auth list
 
    # Test bucket access
-   gsutil ls gs://dev-ml-794354-demo/
+   gsutil ls gs://vjepa2/
    ```
 
 4. **Cloud Run Timeout**

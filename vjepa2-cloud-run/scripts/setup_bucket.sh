@@ -5,7 +5,7 @@
 set -e
 
 PROJECT_ID="dev-ml-794354"
-MAIN_BUCKET="dev-ml-794354-demo"
+MAIN_BUCKET="vjepa2"
 
 # Colors for output
 RED='\033[0;31m'
