@@ -6,12 +6,18 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-# Use mock by default for testing
-from model_handler_mock import VideoClassifier
 
-# Set up logging
+# Set up logging first
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Try to import the real V-JEPA2 model, fall back to mock if not available
+try:
+    from model_handler import VideoClassifier
+    logger.info("Using real V-JEPA2 model handler")
+except ImportError as e:
+    logger.warning(f"V-JEPA2 dependencies not available ({e}), falling back to mock")
+    from model_handler_mock import VideoClassifier
 
 # Conditional import for GCS (allows local testing without GCP credentials)
 USE_GCS = os.getenv("USE_GCS", "false").lower() == "true"
@@ -197,11 +203,21 @@ async def get_info():
 
     # Handle both real and mock models
     try:
-        num_classes = len(classifier.config["id2label"]) if hasattr(classifier, 'config') else "unknown"
-        model_name = "Mock V-JEPA2 (for testing)"
-    except:
+        # Check if it's the real V-JEPA2 model
+        if hasattr(classifier, 'model') and hasattr(classifier.model, 'config'):
+            num_classes = len(classifier.model.config.id2label) if hasattr(classifier.model.config, 'id2label') else "unknown"
+            model_name = "facebook/vjepa2-vitl-fpc16-256-ssv2"
+        elif hasattr(classifier, 'config'):
+            # Mock model
+            num_classes = len(classifier.config["id2label"])
+            model_name = "Mock V-JEPA2 (for testing)"
+        else:
+            num_classes = "unknown"
+            model_name = "Unknown model"
+    except Exception as e:
+        logger.warning(f"Error getting model info: {e}")
         num_classes = "unknown"
-        model_name = "Mock V-JEPA2 (for testing)"
+        model_name = "Unknown model"
 
     return {
         "model": {

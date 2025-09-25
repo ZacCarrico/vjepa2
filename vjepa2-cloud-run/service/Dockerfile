@@ -1,5 +1,5 @@
-# Use NVIDIA CUDA base image for GPU support
-FROM nvidia/cuda:11.8-cudnn8-runtime-ubuntu22.04
+# Use NVIDIA CUDA base image for GPU support (Cloud Run A100 compatible)
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
