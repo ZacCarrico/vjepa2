@@ -7,7 +7,7 @@ set -e
 PROJECT_ID="dev-ml-794354"
 SERVICE_NAME="vjepa2-classifier"
 REGION="us-central1"
-IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
+IMAGE_NAME="$REGION-docker.pkg.dev/$PROJECT_ID/vjepa2-repo/$SERVICE_NAME"
 
 # Colors for output
 RED='\033[0;31m'
@@ -32,7 +32,19 @@ gcloud config set project $PROJECT_ID
 echo -e "${YELLOW}🔌 Enabling required APIs...${NC}"
 gcloud services enable cloudbuild.googleapis.com
 gcloud services enable run.googleapis.com
-gcloud services enable containerregistry.googleapis.com
+gcloud services enable artifactregistry.googleapis.com
+
+# Create Artifact Registry repository
+echo -e "${YELLOW}📦 Creating Artifact Registry repository...${NC}"
+if ! gcloud artifacts repositories describe vjepa2-repo --location=$REGION &> /dev/null; then
+    gcloud artifacts repositories create vjepa2-repo \
+        --repository-format=docker \
+        --location=$REGION \
+        --description="V-JEPA2 Video Classifier repository"
+    echo -e "${GREEN}✅ Artifact Registry repository created${NC}"
+else
+    echo -e "${GREEN}✅ Artifact Registry repository already exists${NC}"
+fi
 
 # Check if we're in the right directory
 if [ ! -f "service/Dockerfile" ]; then
