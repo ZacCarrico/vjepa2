@@ -25,10 +25,11 @@ graph LR
 ```mermaid
 graph LR
     A[Input Video] --> B[V-JEPA 2 Encoder]
-    B --> C[Prediction Head]
-    C --> D[Embeddings]
-    D --> E[Downstream Task Head]
-    E --> F[Task Output]
+    B --> C[Video Embeddings]
+    C --> D[Global Average Pooling]
+    D --> E[Classification Head]
+    E --> F[Class Logits]
+    F --> G[ArgMax -> Predicted Class]
 ```
 
 ## V-JEPA 2 With Classification Output (Without LoRA)
