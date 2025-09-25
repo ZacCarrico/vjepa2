@@ -1,4 +1,28 @@
-# LoRA Model Architecture Changes
+# V-JEPA 2 LoRA Fine-tuning Architecture
+
+This document shows the architecture changes for V-JEPA 2 LoRA fine-tuning on a **UCF-101 subset with 10 classes** (not the full 101 classes).
+
+## V-JEPA 2 General Training for Classification
+```mermaid
+graph TD
+    A[Input Video<br/>T frames] --> B[V-JEPA 2 Encoder<br/>facebook/vjepa2-vitl-fpc16-256-ssv2]
+    B --> C[Video Embeddings<br/>sequence_length × hidden_size]
+    C --> D[Global Average Pooling]
+    D --> E[Classification Head<br/>Linear Layer]
+    E --> F[Class Logits<br/>10 classes for UCF-101 subset]
+    F --> G[Cross-Entropy Loss]
+
+    H[Ground Truth Labels<br/>10 UCF-101 classes] --> G
+    G --> I[Backpropagation]
+    I --> J{Training Mode}
+    J -->|Regular Fine-tuning| K[Update All Parameters]
+    J -->|LoRA Fine-tuning| L[Update LoRA + Head Only]
+
+    style B fill:#e3f2fd
+    style E fill:#e8f5e8
+    style G fill:#fff3e0
+    style L fill:#c8e6c9
+```
 
 ## V-JEPA 2 Inference
 ```mermaid
@@ -139,7 +163,7 @@ graph TD
     B --> C[SSV2 Classes<br/>174 outputs]
 
     A --> D[New Classification Head<br/>Trainable]
-    D --> E[UCF-101 Classes<br/>101 outputs]
+    D --> E[UCF-101 Subset Classes<br/>10 outputs]
 
     style B fill:#ffcdd2
     style C fill:#ffcdd2
@@ -151,5 +175,8 @@ graph TD
 - **216 LoRA modules** applied to attention layers (query_proj, key_proj, value_proj, out_proj)
 - **Original attention weights frozen** (red boxes)
 - **LoRA adapters trainable** (green boxes) with rank=16, α=32.0
-- **Classification head replaced** and trainable for UCF-101 (101 classes vs original SSV2 174 classes)
+- **Classification head replaced** and trainable for UCF-101 subset (10 classes vs original SSV2 174 classes)
 - **Massive parameter reduction**: Only LoRA + classification head parameters are trainable
+- **Classification head parameters**: ~10,240 parameters (1024 hidden × 10 classes + 10 bias terms)
+- **LoRA parameters**: ~501,760 parameters across all attention modules
+- **Total trainable**: ~512,000 parameters vs 375M+ total model parameters
