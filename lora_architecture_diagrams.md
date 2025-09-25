@@ -1,15 +1,13 @@
 # LoRA Model Architecture Changes
 
-## V-JEPA 2 Architecture
+## V-JEPA 2 Inference
 ```mermaid
 graph TD
-    A[Input Video] --> B[Masking Module]
-    B --> C[Student Encoder]
-    A --> D[Teacher Encoder (EMA)]
-    C --> E[Prediction Head]
-    E --> F[Predicted Embeddings]
-    D --> G[Target Embeddings]
-    F --> H[Loss: Prediction vs Target]
+    A[Input Video] --> B[V-JEPA 2 Encoder]
+    B --> C[Prediction Head]
+    C --> D[Embeddings]
+    D --> E[Downstream Task Head]
+    E --> F[Task Output]
 ```
 
 ## V-JEPA 2 With Classification Output (Without LoRA)
