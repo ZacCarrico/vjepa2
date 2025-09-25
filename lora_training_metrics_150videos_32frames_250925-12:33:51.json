@@ -1,0 +1,33 @@
+{
+  "timestamp": "250925-12:33:51",
+  "num_train_videos": 150,
+  "num_val_videos": 30,
+  "num_test_videos": 75,
+  "frames_per_clip": 32,
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "train_loss": [
+    1.806086171317745,
+    0.7340869506871378,
+    0.2920557061789205,
+    0.11689410144872209,
+    0.0885036078547568
+  ],
+  "val_acc": [
+    0.36666666666666664,
+    0.5,
+    0.5,
+    0.5,
+    0.5
+  ],
+  "trainable_params": 501770,
+  "total_params": 375809418,
+  "final_test_acc": 0.5733333333333334,
+  "best_val_acc": 0.5,
+  "total_training_time": 1585.4752750396729
+}

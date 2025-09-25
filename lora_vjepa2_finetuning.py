@@ -41,12 +41,19 @@ def parse_arguments():
         default=None,
         help='Number of training videos to use (default: use all available)'
     )
+    parser.add_argument(
+        '--frames_per_clip',
+        type=int,
+        default=None,
+        help='Number of frames per video clip (default: use model default)'
+    )
     return parser.parse_args()
 
 
 # Parse command line arguments
 args = parse_arguments()
 num_train_videos = args.num_train_videos
+frames_per_clip = args.frames_per_clip
 
 # Create timestamp for output files
 timestamp = datetime.now().strftime("%y%m%d-%H:%M:%S")
@@ -56,6 +63,11 @@ if num_train_videos:
     print(f"Using {num_train_videos} training videos")
 else:
     print("Using all available training videos")
+
+if frames_per_clip:
+    print(f"Using {frames_per_clip} frames per clip")
+else:
+    print("Using model default frames per clip")
 
 # Set seed for reproducibility
 set_seed(1)
@@ -238,6 +250,12 @@ model = VJEPA2ForVideoClassification.from_pretrained(
     ignore_mismatched_sizes=True,
 ).to(device)
 
+# Override frames_per_clip if specified
+if frames_per_clip:
+    original_frames = model.config.frames_per_clip
+    model.config.frames_per_clip = frames_per_clip
+    print(f"Overriding frames per clip: {original_frames} → {frames_per_clip}")
+
 print("Original model parameter stats:")
 print_parameter_stats(model, "Original V-JEPA 2")
 
@@ -282,8 +300,9 @@ train_loader, val_loader, test_loader = create_data_loaders(
 
 # ## Training Setup
 
-# Create output directory name with timestamp and video count
-output_suffix = f"{video_count_train}videos_{timestamp}"
+# Create output directory name with timestamp, video count, and frames
+frames_suffix = f"{model.config.frames_per_clip}frames" if frames_per_clip else f"{model.config.frames_per_clip}frames"
+output_suffix = f"{video_count_train}videos_{frames_suffix}_{timestamp}"
 tensorboard_dir = f"runs/vjepa2_lora_finetune_{output_suffix}"
 writer = setup_tensorboard(tensorboard_dir)
 
@@ -311,6 +330,7 @@ training_metrics = {
     "num_train_videos": video_count_train,
     "num_val_videos": video_count_val,
     "num_test_videos": video_count_test,
+    "frames_per_clip": model.config.frames_per_clip,
     "epochs": [],
     "train_loss": [],
     "val_acc": [],
@@ -421,6 +441,7 @@ model_save_dir = f"./vjepa2-lora-ucf101_{output_suffix}"
 
 print("\nAdapter-based fine-tuning demonstration completed!")
 print(f"Training videos used: {video_count_train:,}")
+print(f"Frames per clip: {model.config.frames_per_clip}")
 print(f"Training session: {timestamp}")
 print(
     f"Memory efficiency: Used only {count_parameters(model)[1]:,} trainable parameters"
