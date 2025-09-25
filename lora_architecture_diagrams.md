@@ -5,23 +5,20 @@ This document shows the architecture changes for V-JEPA 2 LoRA fine-tuning on a 
 ## V-JEPA 2 General Training for Classification
 ```mermaid
 graph TD
-    A[Input Video<br/>T frames] --> B[V-JEPA 2 Encoder<br/>facebook/vjepa2-vitl-fpc16-256-ssv2]
-    B --> C[Video Embeddings<br/>sequence_length × hidden_size]
+    A[Video frames] --> B[V-JEPA 2 Encoder]
+    B --> C[Video Embeddings]
     C --> D[Global Average Pooling]
-    D --> E[Classification Head<br/>Linear Layer]
-    E --> F[Class Logits<br/>10 classes for UCF-101 subset]
+    D --> E[Classification Head]
+    E --> F[Class Logits]
     F --> G[Cross-Entropy Loss]
 
-    H[Ground Truth Labels<br/>10 UCF-101 classes] --> G
+    H[Ground Truth Labels] --> G
     G --> I[Backpropagation]
-    I --> J{Training Mode}
-    J -->|Regular Fine-tuning| K[Update All Parameters]
-    J -->|LoRA Fine-tuning| L[Update LoRA + Head Only]
+    I --> J[Parameter Updates]
 
     style B fill:#e3f2fd
     style E fill:#e8f5e8
     style G fill:#fff3e0
-    style L fill:#c8e6c9
 ```
 
 ## V-JEPA 2 Inference
