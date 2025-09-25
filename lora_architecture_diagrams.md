@@ -4,7 +4,7 @@ This document shows the architecture changes for V-JEPA 2 LoRA fine-tuning on a 
 
 ## V-JEPA 2 General Training for Classification
 ```mermaid
-graph TD
+graph LR
     A[Video frames] --> B[V-JEPA 2 Encoder]
     B --> C[Video Embeddings]
     C --> D[Global Average Pooling]
@@ -23,7 +23,7 @@ graph TD
 
 ## V-JEPA 2 Inference
 ```mermaid
-graph TD
+graph LR
     A[Input Video] --> B[V-JEPA 2 Encoder]
     B --> C[Prediction Head]
     C --> D[Embeddings]
@@ -33,7 +33,7 @@ graph TD
 
 ## V-JEPA 2 With Classification Output (Without LoRA)
 ```mermaid
-graph TD
+graph LR
     A[Input Video] --> B[V-JEPA 2 Encoder]
     B --> C[Attention Layers]
     C --> D[query_proj Linear]
@@ -58,39 +58,47 @@ graph TD
 
 ## V-JEPA 2 Model with LoRA Adapters
 ```mermaid
-graph TD
+graph LR
     A[Input Video] --> B[V-JEPA 2 Encoder]
     B --> C[Attention Layers]
-    C --> D[AdaptedLinear query_proj]
-    C --> E[AdaptedLinear key_proj]
-    C --> F[AdaptedLinear value_proj]
-    C --> G[AdaptedLinear out_proj]
 
-    D --> D1[Original query_proj<br/>FROZEN]
-    D --> D2[LoRA query_proj<br/>TRAINABLE]
-    D1 --> D3[+]
-    D2 --> D3
+    subgraph "Query Projection"
+        D[AdaptedLinear query_proj]
+        D1[Original query_proj<br/>FROZEN]
+        D2[LoRA query_proj<br/>TRAINABLE]
+        D --> D1
+        D --> D2
+        D1 --> D3[+]
+        D2 --> D3
+    end
 
-    E --> E1[Original key_proj<br/>FROZEN]
-    E --> E2[LoRA key_proj<br/>TRAINABLE]
-    E1 --> E3[+]
-    E2 --> E3
+    subgraph "Key Projection"
+        E[AdaptedLinear key_proj]
+        E1[Original key_proj<br/>FROZEN]
+        E2[LoRA key_proj<br/>TRAINABLE]
+        E --> E1
+        E --> E2
+        E1 --> E3[+]
+        E2 --> E3
+    end
 
-    F --> F1[Original value_proj<br/>FROZEN]
-    F --> F2[LoRA value_proj<br/>TRAINABLE]
-    F1 --> F3[+]
-    F2 --> F3
+    subgraph "Value Projection"
+        F[AdaptedLinear value_proj]
+        F1[Original value_proj<br/>FROZEN]
+        F2[LoRA value_proj<br/>TRAINABLE]
+        F --> F1
+        F --> F2
+        F1 --> F3[+]
+        F2 --> F3
+    end
 
-    G --> G1[Original out_proj<br/>FROZEN]
-    G --> G2[LoRA out_proj<br/>TRAINABLE]
-    G1 --> G3[+]
-    G2 --> G3
-
+    C --> D
+    C --> E
+    C --> F
     D3 --> H[Multi-Head Attention]
     E3 --> H
     F3 --> H
-    G3 --> I[Layer Output]
-    H --> I
+    H --> I[Layer Output]
     I --> J[More Encoder Layers...]
     J --> K[Classification Head<br/>TRAINABLE]
     K --> L[Output Logits]
@@ -98,17 +106,15 @@ graph TD
     style D1 fill:#ffcdd2
     style E1 fill:#ffcdd2
     style F1 fill:#ffcdd2
-    style G1 fill:#ffcdd2
     style D2 fill:#c8e6c9
     style E2 fill:#c8e6c9
     style F2 fill:#c8e6c9
-    style G2 fill:#c8e6c9
     style K fill:#c8e6c9
 ```
 
 ## LoRA Layer Internal Structure
 ```mermaid
-graph TD
+graph LR
     A[Input x] --> B[Original Linear Layer<br/>W_0 FROZEN]
     A --> C[LoRA Path]
 
@@ -155,7 +161,7 @@ BA decomposition:  [1024, 1024]   # same as W₀
 
 ## Classification Head Replacement (Without LoRA)
 ```mermaid
-graph TD
+graph LR
     A[V-JEPA 2 Encoder Output] --> B[Original Classification Head<br/>Pre-trained for SSV2]
     B --> C[SSV2 Classes<br/>174 outputs]
 
