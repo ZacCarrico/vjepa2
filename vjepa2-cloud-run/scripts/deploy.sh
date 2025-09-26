@@ -1,6 +1,8 @@
 #!/bin/bash
 
 # Deploy V-JEPA2 Video Classifier to Google Cloud Run
+# Usage: ./deploy.sh [step]
+# Steps: setup, build, deploy, test, all (default)
 
 set -e
 
@@ -16,131 +18,190 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+# Parse command line arguments
+STEP=${1:-all}
+
+# Show help if requested
+if [[ "$1" == "-h" || "$1" == "--help" || "$1" == "help" ]]; then
+    echo -e "${BLUE}🚀 V-JEPA2 Video Classifier Deployment Script${NC}"
+    echo ""
+    echo -e "${YELLOW}Usage:${NC} $0 [step]"
+    echo ""
+    echo -e "${YELLOW}Available steps:${NC}"
+    echo -e "  ${GREEN}setup${NC}    - Set up GCP environment (APIs, Artifact Registry)"
+    echo -e "  ${GREEN}build${NC}    - Build and push container image"
+    echo -e "  ${GREEN}deploy${NC}   - Deploy service to Cloud Run (requires image to exist)"
+    echo -e "  ${GREEN}test${NC}     - Create test script for deployed service"
+    echo -e "  ${GREEN}all${NC}      - Run all steps sequentially (default)"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  $0              # Run all steps"
+    echo -e "  $0 setup        # Only set up GCP environment"
+    echo -e "  $0 build        # Only build and push image"
+    echo -e "  $0 deploy       # Only deploy (after image is built)"
+    echo ""
+    echo -e "${YELLOW}Step-by-step workflow:${NC}"
+    echo -e "  1. $0 setup     # Set up GCP project and dependencies"
+    echo -e "  2. $0 build     # Build and push container image"
+    echo -e "  3. $0 deploy    # Deploy to Cloud Run"
+    echo -e "  4. $0 test      # Create test script"
+    echo ""
+    exit 0
+fi
+
 echo -e "${BLUE}🚀 Deploying V-JEPA2 Video Classifier to Cloud Run${NC}"
+echo -e "${BLUE}Step: $STEP${NC}"
 
-# Check if gcloud is installed and authenticated
-if ! command -v gcloud &> /dev/null; then
-    echo -e "${RED}❌ gcloud CLI not found. Please install it first.${NC}"
-    exit 1
-fi
+# Function definitions
+check_prerequisites() {
+    echo -e "${YELLOW}🔍 Checking prerequisites...${NC}"
 
-# Set project
-echo -e "${YELLOW}🔧 Setting project to: $PROJECT_ID${NC}"
-gcloud config set project $PROJECT_ID
+    # Check if gcloud is installed and authenticated
+    if ! command -v gcloud &> /dev/null; then
+        echo -e "${RED}❌ gcloud CLI not found. Please install it first.${NC}"
+        exit 1
+    fi
 
-# Enable required APIs
-echo -e "${YELLOW}🔌 Enabling required APIs...${NC}"
-gcloud services enable cloudbuild.googleapis.com
-gcloud services enable run.googleapis.com
-gcloud services enable artifactregistry.googleapis.com
+    # Check if we're in the right directory
+    if [ ! -f "service/Dockerfile" ]; then
+        echo -e "${RED}❌ Error: Please run this script from the vjepa2-cloud-run directory${NC}"
+        echo "Expected files: service/Dockerfile, service/main.py"
+        exit 1
+    fi
 
-# Create Artifact Registry repository
-echo -e "${YELLOW}📦 Creating Artifact Registry repository...${NC}"
-if ! gcloud artifacts repositories describe vjepa2-repo --location=$REGION &> /dev/null; then
-    gcloud artifacts repositories create vjepa2-repo \
-        --repository-format=docker \
-        --location=$REGION \
-        --description="V-JEPA2 Video Classifier repository"
-    echo -e "${GREEN}✅ Artifact Registry repository created${NC}"
-else
-    echo -e "${GREEN}✅ Artifact Registry repository already exists${NC}"
-fi
+    echo -e "${GREEN}✅ Prerequisites checked${NC}"
+}
 
-# Check if we're in the right directory
-if [ ! -f "service/Dockerfile" ]; then
-    echo -e "${RED}❌ Error: Please run this script from the vjepa2-cloud-run directory${NC}"
-    echo "Expected files: service/Dockerfile, service/main.py"
-    exit 1
-fi
+setup_gcp() {
+    echo -e "${YELLOW}🔧 Setting up GCP environment...${NC}"
 
-# Build and push the container image
-echo -e "${YELLOW}🔨 Building container image...${NC}"
-echo -e "${BLUE}Image: $IMAGE_NAME${NC}"
+    # Set project
+    echo -e "${YELLOW}🔧 Setting project to: $PROJECT_ID${NC}"
+    gcloud config set project $PROJECT_ID
 
-cd service
+    # Enable required APIs
+    echo -e "${YELLOW}🔌 Enabling required APIs...${NC}"
+    gcloud services enable cloudbuild.googleapis.com
+    gcloud services enable run.googleapis.com
+    gcloud services enable artifactregistry.googleapis.com
 
-# Build the image using Cloud Build
-gcloud builds submit \
-    --tag $IMAGE_NAME \
-    --timeout=30m \
-    .
+    # Create Artifact Registry repository
+    echo -e "${YELLOW}📦 Creating Artifact Registry repository...${NC}"
+    if ! gcloud artifacts repositories describe vjepa2-repo --location=$REGION &> /dev/null; then
+        gcloud artifacts repositories create vjepa2-repo \
+            --repository-format=docker \
+            --location=$REGION \
+            --description="V-JEPA2 Video Classifier repository"
+        echo -e "${GREEN}✅ Artifact Registry repository created${NC}"
+    else
+        echo -e "${GREEN}✅ Artifact Registry repository already exists${NC}"
+    fi
 
-echo -e "${GREEN}✅ Container image built and pushed${NC}"
+    echo -e "${GREEN}✅ GCP setup completed${NC}"
+}
 
-cd ..
+build_and_push() {
+    echo -e "${YELLOW}🔨 Building and pushing container image...${NC}"
+    echo -e "${BLUE}Image: $IMAGE_NAME${NC}"
 
-# Create service account for the Cloud Run service
-echo -e "${YELLOW}👤 Setting up service account...${NC}"
-SERVICE_ACCOUNT="vjepa2-sa"
-SERVICE_ACCOUNT_EMAIL="$SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
+    cd service
 
-# Create service account if it doesn't exist
-if ! gcloud iam service-accounts describe $SERVICE_ACCOUNT_EMAIL &> /dev/null; then
-    gcloud iam service-accounts create $SERVICE_ACCOUNT \
-        --display-name="V-JEPA2 Video Classifier Service Account" \
-        --description="Service account for V-JEPA2 video classifier Cloud Run service"
-    echo -e "${GREEN}✅ Service account created${NC}"
-else
-    echo -e "${GREEN}✅ Service account already exists${NC}"
-fi
+    # Build the image using Cloud Build
+    gcloud builds submit \
+        --tag $IMAGE_NAME \
+        --timeout=30m \
+        .
 
-# Grant necessary permissions to the service account
-echo -e "${YELLOW}🔑 Granting permissions...${NC}"
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
-    --role="roles/storage.objectAdmin"
+    echo -e "${GREEN}✅ Container image built and pushed${NC}"
 
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member="serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
-    --role="roles/logging.logWriter"
+    cd ..
+}
 
-echo -e "${GREEN}✅ Permissions granted${NC}"
+setup_service_account() {
+    echo -e "${YELLOW}👤 Setting up service account...${NC}"
 
-# Deploy to Cloud Run
-echo -e "${YELLOW}☁️  Deploying to Cloud Run...${NC}"
+    SERVICE_ACCOUNT="vjepa2-sa"
+    SERVICE_ACCOUNT_EMAIL="$SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
 
-gcloud run deploy $SERVICE_NAME \
-    --image $IMAGE_NAME \
-    --platform managed \
-    --region $REGION \
-    --service-account $SERVICE_ACCOUNT_EMAIL \
-    --memory 32Gi \
-    --cpu 8 \
-    --gpu 1 \
-    --gpu-type nvidia-a100 \
-    --min-instances 0 \
-    --max-instances 4 \
-    --timeout 3600 \
-    --concurrency 1 \
-    --no-allow-unauthenticated \
-    --set-env-vars USE_GCS=true \
-    --port 8080
+    # Create service account if it doesn't exist
+    if ! gcloud iam service-accounts describe $SERVICE_ACCOUNT_EMAIL &> /dev/null; then
+        gcloud iam service-accounts create $SERVICE_ACCOUNT \
+            --display-name="V-JEPA2 Video Classifier Service Account" \
+            --description="Service account for V-JEPA2 video classifier Cloud Run service"
+        echo -e "${GREEN}✅ Service account created${NC}"
+    else
+        echo -e "${GREEN}✅ Service account already exists${NC}"
+    fi
 
-echo -e "${GREEN}✅ Service deployed successfully${NC}"
+    # Grant necessary permissions to the service account
+    echo -e "${YELLOW}🔑 Granting permissions...${NC}"
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member="serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
+        --role="roles/storage.objectAdmin"
 
-# Get the service URL
-SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format="value(status.url)")
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+        --member="serviceAccount:$SERVICE_ACCOUNT_EMAIL" \
+        --role="roles/logging.logWriter"
 
-echo ""
-echo -e "${GREEN}🎉 Deployment Complete!${NC}"
-echo -e "${BLUE}Service URL: $SERVICE_URL${NC}"
-echo -e "${BLUE}Region: $REGION${NC}"
-echo -e "${BLUE}Service Account: $SERVICE_ACCOUNT_EMAIL${NC}"
-echo ""
+    echo -e "${GREEN}✅ Permissions granted${NC}"
+}
 
-# Display resource configuration
-echo -e "${YELLOW}📊 Resource Configuration:${NC}"
-echo -e "  - CPU: 8 vCPUs"
-echo -e "  - Memory: 32 GiB"
-echo -e "  - GPU: 1x NVIDIA A100"
-echo -e "  - Min Instances: 0 (scales to zero)"
-echo -e "  - Max Instances: 4"
-echo -e "  - Timeout: 60 minutes"
-echo ""
+deploy_to_cloudrun() {
+    echo -e "${YELLOW}☁️  Deploying to Cloud Run...${NC}"
 
-# Create a test script for the deployed service
-echo -e "${YELLOW}📝 Creating test script for deployed service...${NC}"
-cat > test_deployed.py << EOF
+    SERVICE_ACCOUNT="vjepa2-sa"
+    SERVICE_ACCOUNT_EMAIL="$SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
+
+    gcloud run deploy $SERVICE_NAME \
+        --image $IMAGE_NAME \
+        --platform managed \
+        --region $REGION \
+        --service-account $SERVICE_ACCOUNT_EMAIL \
+        --memory 32Gi \
+        --cpu 8 \
+        --gpu 1 \
+        --gpu-type nvidia-a100 \
+        --min-instances 0 \
+        --max-instances 4 \
+        --timeout 3600 \
+        --concurrency 1 \
+        --no-allow-unauthenticated \
+        --set-env-vars USE_GCS=true \
+        --port 8080
+
+    echo -e "${GREEN}✅ Service deployed successfully${NC}"
+}
+
+show_deployment_info() {
+    # Get the service URL
+    SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format="value(status.url)")
+    SERVICE_ACCOUNT_EMAIL="vjepa2-sa@$PROJECT_ID.iam.gserviceaccount.com"
+
+    echo ""
+    echo -e "${GREEN}🎉 Deployment Complete!${NC}"
+    echo -e "${BLUE}Service URL: $SERVICE_URL${NC}"
+    echo -e "${BLUE}Region: $REGION${NC}"
+    echo -e "${BLUE}Service Account: $SERVICE_ACCOUNT_EMAIL${NC}"
+    echo ""
+
+    # Display resource configuration
+    echo -e "${YELLOW}📊 Resource Configuration:${NC}"
+    echo -e "  - CPU: 8 vCPUs"
+    echo -e "  - Memory: 32 GiB"
+    echo -e "  - GPU: 1x NVIDIA A100"
+    echo -e "  - Min Instances: 0 (scales to zero)"
+    echo -e "  - Max Instances: 4"
+    echo -e "  - Timeout: 60 minutes"
+    echo ""
+}
+
+create_test_script() {
+    echo -e "${YELLOW}📝 Creating test script for deployed service...${NC}"
+
+    # Get the service URL
+    SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format="value(status.url)" 2>/dev/null || echo "")
+
+    cat > test_deployed.py << EOF
 #!/usr/bin/env python3
 """
 Test script for deployed V-JEPA2 Video Classifier on Cloud Run
@@ -152,7 +213,7 @@ import os
 SERVICE_URL = "$SERVICE_URL"
 
 def get_auth_token():
-    \"\"\"Get authentication token for Cloud Run service\"\"\"
+    """Get authentication token for Cloud Run service"""
     import subprocess
     result = subprocess.run([
         "gcloud", "auth", "print-identity-token"
@@ -185,16 +246,60 @@ if __name__ == "__main__":
     print("✅ Service is accessible!" if success else "❌ Service test failed")
 EOF
 
-chmod +x test_deployed.py
+    chmod +x test_deployed.py
 
-echo -e "${GREEN}✅ Test script created: test_deployed.py${NC}"
-echo ""
-echo -e "${YELLOW}Next steps:${NC}"
-echo -e "  1. Test the deployed service: python3 test_deployed.py"
-echo -e "  2. Upload test videos to GCS: gsutil cp video.mp4 gs://vjepa2/raw-videos/"
-echo -e "  3. Monitor logs: gcloud logging read 'resource.type=cloud_run_revision AND resource.labels.service_name=$SERVICE_NAME' --limit=50"
-echo ""
-echo -e "${BLUE}📚 Useful commands:${NC}"
-echo -e "  - View service details: gcloud run services describe $SERVICE_NAME --region=$REGION"
-echo -e "  - Update service: ./scripts/deploy.sh (re-run this script)"
-echo -e "  - Delete service: gcloud run services delete $SERVICE_NAME --region=$REGION"
+    echo -e "${GREEN}✅ Test script created: test_deployed.py${NC}"
+}
+
+show_next_steps() {
+    echo ""
+    echo -e "${YELLOW}Next steps:${NC}"
+    echo -e "  1. Test the deployed service: python3 test_deployed.py"
+    echo -e "  2. Upload test videos to GCS: gsutil cp video.mp4 gs://vjepa2/raw-videos/"
+    echo -e "  3. Monitor logs: gcloud logging read 'resource.type=cloud_run_revision AND resource.labels.service_name=$SERVICE_NAME' --limit=50"
+    echo ""
+    echo -e "${BLUE}📚 Useful commands:${NC}"
+    echo -e "  - View service details: gcloud run services describe $SERVICE_NAME --region=$REGION"
+    echo -e "  - Update service: ./scripts/deploy.sh (re-run this script)"
+    echo -e "  - Delete service: gcloud run services delete $SERVICE_NAME --region=$REGION"
+}
+
+# Main execution logic
+case $STEP in
+    "setup")
+        check_prerequisites
+        setup_gcp
+        ;;
+    "build")
+        check_prerequisites
+        build_and_push
+        ;;
+    "deploy")
+        check_prerequisites
+        setup_service_account
+        deploy_to_cloudrun
+        show_deployment_info
+        create_test_script
+        show_next_steps
+        ;;
+    "test")
+        create_test_script
+        echo -e "${BLUE}Run: python3 test_deployed.py${NC}"
+        ;;
+    "all")
+        check_prerequisites
+        setup_gcp
+        build_and_push
+        setup_service_account
+        deploy_to_cloudrun
+        show_deployment_info
+        create_test_script
+        show_next_steps
+        ;;
+    *)
+        echo -e "${RED}❌ Invalid step: $STEP${NC}"
+        echo -e "${YELLOW}Valid steps: setup, build, deploy, test, all${NC}"
+        echo -e "${BLUE}Run '$0 help' for more information${NC}"
+        exit 1
+        ;;
+esac
