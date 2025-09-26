@@ -20,14 +20,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
 
-from common.data import (
+from src.common.data import (
     CustomVideoDataset,
     create_data_loaders,
     create_label_mappings,
     setup_ucf101_dataset,
 )
-from common.training import evaluate, setup_tensorboard
-from common.utils import count_parameters, get_device, print_parameter_stats, set_seed
+from src.common.training import evaluate, setup_tensorboard
+from src.common.utils import count_parameters, get_device, print_parameter_stats, set_seed
 
 print("Torch:", torch.__version__)
 

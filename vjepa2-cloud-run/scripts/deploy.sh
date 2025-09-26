@@ -28,17 +28,20 @@ if [[ "$1" == "-h" || "$1" == "--help" || "$1" == "help" ]]; then
     echo -e "${YELLOW}Usage:${NC} $0 [step]"
     echo ""
     echo -e "${YELLOW}Available steps:${NC}"
-    echo -e "  ${GREEN}setup${NC}    - Set up GCP environment (APIs, Artifact Registry)"
-    echo -e "  ${GREEN}build${NC}    - Build and push container image"
-    echo -e "  ${GREEN}deploy${NC}   - Deploy service to Cloud Run (requires image to exist)"
-    echo -e "  ${GREEN}test${NC}     - Create test script for deployed service"
-    echo -e "  ${GREEN}all${NC}      - Run all steps sequentially (default)"
+    echo -e "  ${GREEN}setup${NC}       - Set up GCP environment (APIs, Artifact Registry)"
+    echo -e "  ${GREEN}build${NC}       - Build and push container image (Cloud Build)"
+    echo -e "  ${GREEN}build-local${NC} - Build and push container image (local Docker)"
+    echo -e "  ${GREEN}deploy${NC}      - Deploy service to Cloud Run (requires image to exist)"
+    echo -e "  ${GREEN}test${NC}        - Create test script for deployed service"
+    echo -e "  ${GREEN}all${NC}         - Run all steps sequentially (default)"
+    echo -e "  ${GREEN}all-local${NC}   - Run all steps with local build (faster)"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
-    echo -e "  $0              # Run all steps"
-    echo -e "  $0 setup        # Only set up GCP environment"
-    echo -e "  $0 build        # Only build and push image"
-    echo -e "  $0 deploy       # Only deploy (after image is built)"
+    echo -e "  $0                 # Run all steps with Cloud Build"
+    echo -e "  $0 all-local       # Run all steps with local Docker build (faster)"
+    echo -e "  $0 setup           # Only set up GCP environment"
+    echo -e "  $0 build-local     # Only build and push image locally"
+    echo -e "  $0 deploy          # Only deploy (after image is built)"
     echo ""
     echo -e "${YELLOW}Step-by-step workflow:${NC}"
     echo -e "  1. $0 setup     # Set up GCP project and dependencies"
@@ -101,18 +104,33 @@ setup_gcp() {
 }
 
 build_and_push() {
+    local build_method=${1:-cloud}
+
     echo -e "${YELLOW}🔨 Building and pushing container image...${NC}"
     echo -e "${BLUE}Image: $IMAGE_NAME${NC}"
+    echo -e "${BLUE}Build method: $build_method${NC}"
 
     cd service
 
-    # Build the image using Cloud Build
-    gcloud builds submit \
-        --tag $IMAGE_NAME \
-        --timeout=30m \
-        .
+    if [ "$build_method" = "local" ]; then
+        # Build locally with Docker
+        echo -e "${YELLOW}🐳 Building image locally...${NC}"
+        docker build -t $IMAGE_NAME .
 
-    echo -e "${GREEN}✅ Container image built and pushed${NC}"
+        echo -e "${YELLOW}📤 Pushing image to Artifact Registry...${NC}"
+        docker push $IMAGE_NAME
+
+        echo -e "${GREEN}✅ Container image built locally and pushed${NC}"
+    else
+        # Build the image using Cloud Build
+        echo -e "${YELLOW}☁️ Building image with Cloud Build...${NC}"
+        gcloud builds submit \
+            --tag $IMAGE_NAME \
+            --timeout=30m \
+            .
+
+        echo -e "${GREEN}✅ Container image built and pushed via Cloud Build${NC}"
+    fi
 
     cd ..
 }
@@ -272,7 +290,11 @@ case $STEP in
         ;;
     "build")
         check_prerequisites
-        build_and_push
+        build_and_push cloud
+        ;;
+    "build-local")
+        check_prerequisites
+        build_and_push local
         ;;
     "deploy")
         check_prerequisites
@@ -289,7 +311,17 @@ case $STEP in
     "all")
         check_prerequisites
         setup_gcp
-        build_and_push
+        build_and_push cloud
+        setup_service_account
+        deploy_to_cloudrun
+        show_deployment_info
+        create_test_script
+        show_next_steps
+        ;;
+    "all-local")
+        check_prerequisites
+        setup_gcp
+        build_and_push local
         setup_service_account
         deploy_to_cloudrun
         show_deployment_info
@@ -298,7 +330,7 @@ case $STEP in
         ;;
     *)
         echo -e "${RED}❌ Invalid step: $STEP${NC}"
-        echo -e "${YELLOW}Valid steps: setup, build, deploy, test, all${NC}"
+        echo -e "${YELLOW}Valid steps: setup, build, build-local, deploy, test, all, all-local${NC}"
         echo -e "${BLUE}Run '$0 help' for more information${NC}"
         exit 1
         ;;

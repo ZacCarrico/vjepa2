@@ -30,29 +30,43 @@ vjepa2/
 ├── 📄 README.md                                    # This file
 ├── 📄 requirements.txt                             # Python dependencies
 │
-├── 🧠 TRAINING SCRIPTS
-│   ├── vjepa2_finetuning.py                       # Final layer only fine-tuning
-│   └── lora_vjepa2_finetuning.py                  # LoRA + final layer fine-tuning
+├── 🧠 SOURCE CODE
+│   └── src/
+│       ├── common/                                # Shared modules
+│       │   ├── utils.py                          # Shared utilities (seed, device, parameter counting)
+│       │   ├── data.py                           # Dataset classes, data loading, transforms
+│       │   └── training.py                       # Evaluation functions, TensorBoard setup
+│       ├── vjepa2_finetuning.py                  # Final layer only fine-tuning
+│       └── lora_vjepa2_finetuning.py             # LoRA + final layer fine-tuning
 │
-├── 📦 COMMON MODULES
-│   └── common/
-│       ├── utils.py                               # Shared utilities (seed, device, parameter counting)
-│       ├── data.py                                # Dataset classes, data loading, transforms
-│       └── training.py                            # Evaluation functions, TensorBoard setup
-│
-├── 📊 ANALYSIS & RESULTS
-│   └── analysis/
+├── 🔧 ANALYSIS SCRIPTS
+│   └── scripts/
 │       ├── compare_results.py                     # Comprehensive comparison analysis script
-│       ├── comparison_table.csv                   # Detailed metrics comparison table
-│       ├── efficiency_comparison.csv              # Parameter efficiency analysis
-│       ├── training_comparison.png                # Training curves visualization
-│       └── efficiency_analysis.png                # Parameter efficiency plots
+│       ├── compare_lora_videos.py                 # Video count comparison analysis
+│       ├── create_comparison_plot.py              # Create training comparison plots
+│       └── plots_as_function_of_fpc.py            # Frames per clip analysis
 │
-├── 📝 TRAINING OUTPUTS
-│   └── training_outputs/
+├── 📊 RESULTS & OUTPUTS
+│   └── results/
+│       ├── metrics/                               # Training metrics JSONs
+│       │   ├── lora_training_metrics_*.json      # Various training configurations
+│       │   └── lora_training_metrics.json        # Main LoRA metrics
+│       ├── *.png                                  # All visualization plots
+│       └── *.csv                                  # Comparison tables and analysis
+│
+├── 📝 TRAINING LOGS
+│   └── logs/
 │       ├── final_layer_training_output_refactored.txt # Complete training log (final layer)
-│       ├── lora_training_output_refactored.txt    # Complete training log (LoRA)
-│       └── lora_training_metrics.json             # Structured LoRA metrics
+│       └── lora_training_output_refactored.txt    # Complete training log (LoRA)
+│
+├── 📚 DOCUMENTATION
+│   └── docs/
+│       ├── lora_architecture_diagrams.md          # LoRA architecture documentation
+│       └── SYS_DESIGN.md                          # System design documentation
+│
+├── 📦 DATA & DEPLOYMENT
+│   ├── UCF101_subset/                             # Dataset (train/val/test splits)
+│   └── vjepa2-cloud-run/                          # Cloud deployment configuration
 └── 🔧 CONFIGURATION
     ├── .gitignore                                 # Git ignore patterns
     └── .venv/                                     # Python virtual environment
@@ -77,20 +91,20 @@ pip install -r requirements.txt
 ### 2. **Run Training Experiments**
 ```bash
 # Run final layer only fine-tuning
-python vjepa2_finetuning.py
+python src/vjepa2_finetuning.py
 
 # Run LoRA + final layer fine-tuning
-python lora_vjepa2_finetuning.py
+python src/lora_vjepa2_finetuning.py
 
 # Generate comparison analysis
-python analysis/compare_results.py
+python scripts/compare_results.py
 ```
 
 ### 3. **View Results**
-- **Training curves**: `analysis/training_comparison.png`
-- **Parameter efficiency**: `analysis/efficiency_analysis.png`
-- **Detailed metrics**: `analysis/comparison_table.csv`
-- **Training logs**: `training_outputs/`
+- **Training curves**: `results/training_comparison.png`
+- **Parameter efficiency**: `results/efficiency_analysis.png`
+- **Detailed metrics**: `results/comparison_table.csv`
+- **Training logs**: `logs/`
 - **TensorBoard logs**: `tensorboard --logdir runs`
 
 ## 🎛️ **Configuration Options**

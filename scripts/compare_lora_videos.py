@@ -29,9 +29,9 @@ def load_lora_metrics():
     """Load training metrics from the three LoRA experiments"""
 
     # Load all three metrics files
-    metrics_75 = json.load(open("../lora_training_metrics_75videos_250924-17:36:59.json"))
-    metrics_150 = json.load(open("../lora_training_metrics_150videos_250924-17:15:47.json"))
-    metrics_300 = json.load(open("../lora_training_metrics_300videos_250924-14:26:30.json"))
+    metrics_75 = json.load(open("../results/metrics/lora_training_metrics_75videos_250924-17:36:59.json"))
+    metrics_150 = json.load(open("../results/metrics/lora_training_metrics_150videos_250924-17:15:47.json"))
+    metrics_300 = json.load(open("../results/metrics/lora_training_metrics_300videos_250924-14:26:30.json"))
 
     # Add method labels for identification
     metrics_75["method"] = "75 Videos"
