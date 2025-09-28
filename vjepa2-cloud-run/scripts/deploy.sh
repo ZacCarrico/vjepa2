@@ -170,7 +170,9 @@ deploy_to_cloudrun() {
     SERVICE_ACCOUNT="vjepa2-sa"
     SERVICE_ACCOUNT_EMAIL="$SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
 
-    gcloud run deploy $SERVICE_NAME \
+    # Try with GPU first (alpha), fallback to CPU if not available
+    echo -e "${YELLOW}Attempting GPU deployment...${NC}"
+    if gcloud alpha run deploy $SERVICE_NAME \
         --image $IMAGE_NAME \
         --platform managed \
         --region $REGION \
@@ -185,7 +187,26 @@ deploy_to_cloudrun() {
         --concurrency 1 \
         --no-allow-unauthenticated \
         --set-env-vars USE_GCS=true \
-        --port 8080
+        --port 8080 2>/dev/null; then
+        echo -e "${GREEN}✅ GPU deployment successful${NC}"
+    else
+        echo -e "${YELLOW}⚠️  GPU deployment failed, deploying with CPU only...${NC}"
+        gcloud run deploy $SERVICE_NAME \
+            --image $IMAGE_NAME \
+            --platform managed \
+            --region $REGION \
+            --service-account $SERVICE_ACCOUNT_EMAIL \
+            --memory 32Gi \
+            --cpu 8 \
+            --min-instances 0 \
+            --max-instances 4 \
+            --timeout 3600 \
+            --concurrency 1 \
+            --no-allow-unauthenticated \
+            --set-env-vars USE_GCS=true \
+            --port 8080
+        echo -e "${YELLOW}⚠️  Service deployed with CPU only due to GPU quota limitations${NC}"
+    fi
 
     echo -e "${GREEN}✅ Service deployed successfully${NC}"
 }
