@@ -1,0 +1,339 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+import pathlib
+import random
+import time
+from typing import Dict, List, Tuple
+
+import numpy as np
+import torch
+from torch.utils.data import DataLoader, Dataset
+from torchcodec.decoders import VideoDecoder
+from torchcodec.samplers import clips_at_random_indices
+from torchvision.transforms import v2
+from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
+
+from common.training import evaluate, setup_tensorboard
+from common.utils import get_device, set_seed, print_parameter_stats
+
+
+class ActionDetectionDataset(Dataset):
+    """Dataset for NTU RGB action detection with specific actions."""
+
+    def __init__(self, video_file_paths: List[pathlib.Path], label2id: Dict[str, int]):
+        self.video_file_paths = video_file_paths
+        self.label2id = label2id
+
+    def __len__(self):
+        return len(self.video_file_paths)
+
+    def __getitem__(self, idx):
+        video_path = self.video_file_paths[idx]
+
+        # Extract action from filename (e.g., A008, A009, A023)
+        filename = video_path.name
+        if "A008_rgb.avi" in filename:
+            label = "sitting_down"
+        elif "A009_rgb.avi" in filename:
+            label = "standing_up"
+        elif "A023_rgb.avi" in filename:
+            label = "waving"
+        else:
+            label = "other"
+
+        decoder = VideoDecoder(video_path)
+        return decoder, self.label2id[label]
+
+
+def setup_ntu_action_dataset() -> Tuple[List, List, List, Dict, Dict]:
+    """
+    Setup NTU RGB dataset for action detection.
+
+    Returns:
+        Tuple of (train_paths, val_paths, test_paths, label2id, id2label)
+    """
+    ntu_rgb_path = pathlib.Path("ntu_rgb")
+
+    # Find target action videos (limit to 100 each)
+    sitting_videos = list(ntu_rgb_path.glob("*A008_rgb.avi"))[:100]
+    standing_videos = list(ntu_rgb_path.glob("*A009_rgb.avi"))[:100]
+    waving_videos = list(ntu_rgb_path.glob("*A023_rgb.avi"))[:100]
+
+    # Find negative samples (other actions)
+    all_videos = list(ntu_rgb_path.glob("*.avi"))
+    target_actions = set(sitting_videos + standing_videos + waving_videos)
+    negative_videos = [v for v in all_videos if v not in target_actions]
+
+    print(f"Found {len(sitting_videos)} sitting down videos")
+    print(f"Found {len(standing_videos)} standing up videos")
+    print(f"Found {len(waving_videos)} waving videos")
+    print(f"Found {len(negative_videos)} negative sample videos")
+
+    # Balance dataset by sampling negatives
+    total_positives = len(sitting_videos) + len(standing_videos) + len(waving_videos)
+
+    # Sample 100 negatives to match other classes
+    random.seed(42)
+    sampled_negatives = random.sample(negative_videos, min(100, len(negative_videos)))
+
+    # Combine all videos
+    all_action_videos = sitting_videos + standing_videos + waving_videos + sampled_negatives
+
+    # Shuffle and split
+    random.shuffle(all_action_videos)
+
+    # 70/15/15 split
+    total_videos = len(all_action_videos)
+    train_size = int(0.7 * total_videos)
+    val_size = int(0.15 * total_videos)
+
+    train_videos = all_action_videos[:train_size]
+    val_videos = all_action_videos[train_size:train_size + val_size]
+    test_videos = all_action_videos[train_size + val_size:]
+
+    # Create label mappings
+    label2id = {
+        "sitting_down": 0,
+        "standing_up": 1,
+        "waving": 2,
+        "other": 3
+    }
+    id2label = {v: k for k, v in label2id.items()}
+
+    print(f"\nDataset splits:")
+    print(f"Train: {len(train_videos)} videos")
+    print(f"Validation: {len(val_videos)} videos")
+    print(f"Test: {len(test_videos)} videos")
+
+    return train_videos, val_videos, test_videos, label2id, id2label
+
+
+def collate_fn(samples, frames_per_clip, transforms):
+    """Sample clips and apply transforms to a batch."""
+    clips, labels = [], []
+    for decoder, lbl in samples:
+        try:
+            clip = clips_at_random_indices(
+                decoder,
+                num_clips=1,
+                num_frames_per_clip=frames_per_clip,
+                num_indices_between_frames=3,
+            ).data
+            clips.append(clip)
+            labels.append(lbl)
+        except Exception as e:
+            print(f"Error processing video: {e}")
+            # Skip this sample
+            continue
+
+    if not clips:
+        # Return empty tensors if no valid clips
+        return torch.empty(0, frames_per_clip, 3, 224, 224), torch.empty(0, dtype=torch.long)
+
+    videos = torch.cat(clips, dim=0)
+    videos = transforms(videos)
+    return videos, torch.tensor(labels)
+
+
+def setup_transforms(processor):
+    """Setup train and eval transforms using processor crop size."""
+    train_transforms = v2.Compose([
+        v2.RandomResizedCrop(
+            (processor.crop_size["height"], processor.crop_size["width"])
+        ),
+        v2.RandomHorizontalFlip(),
+    ])
+    eval_transforms = v2.Compose([
+        v2.CenterCrop((processor.crop_size["height"], processor.crop_size["width"]))
+    ])
+    return train_transforms, eval_transforms
+
+
+def create_data_loaders(train_ds, val_ds, test_ds, processor, batch_size=1, num_workers=0, frames_per_clip=16):
+    """Create DataLoaders for train, validation, and test sets."""
+    train_transforms, eval_transforms = setup_transforms(processor)
+
+    from functools import partial
+
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=batch_size,
+        shuffle=True,
+        collate_fn=partial(
+            collate_fn,
+            frames_per_clip=frames_per_clip,
+            transforms=train_transforms,
+        ),
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=partial(
+            collate_fn,
+            frames_per_clip=frames_per_clip,
+            transforms=eval_transforms,
+        ),
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+    test_loader = DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=partial(
+            collate_fn,
+            frames_per_clip=frames_per_clip,
+            transforms=eval_transforms,
+        ),
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    return train_loader, val_loader, test_loader
+
+
+def main():
+    print("Starting V-JEPA 2 Action Detection Fine-tuning")
+    print("=" * 50)
+
+    # Set seed for reproducibility
+    set_seed(42)
+
+    # Auto-detect best available device
+    device = get_device()
+    print(f"Using device: {device}")
+
+    # Setup dataset
+    train_videos, val_videos, test_videos, label2id, id2label = setup_ntu_action_dataset()
+
+    # Create datasets
+    train_ds = ActionDetectionDataset(train_videos, label2id)
+    val_ds = ActionDetectionDataset(val_videos, label2id)
+    test_ds = ActionDetectionDataset(test_videos, label2id)
+
+    # Setup model and processor
+    model_name = "facebook/vjepa2-vitl-fpc16-256-ssv2"
+    processor = VJEPA2VideoProcessor.from_pretrained(model_name)
+    model = VJEPA2ForVideoClassification.from_pretrained(
+        model_name,
+        torch_dtype=torch.float32,
+        label2id=label2id,
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+    ).to(device)
+
+    # Print model statistics
+    print_parameter_stats(model, "V-JEPA 2 Action Detection Model")
+
+    # Create DataLoaders
+    batch_size = 1
+    num_workers = 0
+    frames_per_clip = model.config.frames_per_clip
+
+    train_loader, val_loader, test_loader = create_data_loaders(
+        train_ds, val_ds, test_ds, processor, batch_size, num_workers, frames_per_clip
+    )
+
+    # Freeze backbone and only train classification head
+    for param in model.vjepa2.parameters():
+        param.requires_grad = False
+
+    print_parameter_stats(model, "V-JEPA 2 Action Detection Model (After Freezing)")
+
+    # Setup training
+    trainable = [p for p in model.parameters() if p.requires_grad]
+    optimizer = torch.optim.Adam(trainable, lr=1e-4)
+
+    # Setup tensorboard
+    writer = setup_tensorboard("runs/ntu_action_detection")
+
+    # Training parameters
+    num_epochs = 1
+    accumulation_steps = 4
+
+    # Best model tracking
+    best_val_acc = 0.0
+    best_model_state = None
+
+    # Start timing
+    total_start_time = time.time()
+    print(f"Starting training at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Training for {num_epochs} epochs with {len(train_loader)} steps per epoch")
+
+    for epoch in range(1, num_epochs + 1):
+        epoch_start_time = time.time()
+        model.train()
+        running_loss = 0.0
+        optimizer.zero_grad()
+
+        for step, (vids, labels) in enumerate(train_loader, start=1):
+            if vids.size(0) == 0:  # Skip empty batches
+                continue
+
+            inputs = processor(vids, return_tensors="pt").to(model.device)
+            labels = labels.to(model.device)
+            outputs = model(**inputs, labels=labels)
+            loss = outputs.loss / accumulation_steps
+            loss.backward()
+            running_loss += loss.item()
+
+            if step % accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+                if step % (accumulation_steps * 10) == 0:  # Log every 10 accumulation steps
+                    print(f"Epoch {epoch} Step {step}: Accumulated Loss = {running_loss:.4f}")
+                    writer.add_scalar("Train/Loss", running_loss, (epoch-1) * len(train_loader) + step)
+                running_loss = 0.0
+
+        # End of epoch evaluation
+        val_acc = evaluate(val_loader, model, processor, model.device)
+        epoch_end_time = time.time()
+        epoch_duration = epoch_end_time - epoch_start_time
+
+        print(f"Epoch {epoch} Validation Accuracy: {val_acc:.4f}")
+        print(f"Epoch {epoch} Duration: {epoch_duration:.2f} seconds")
+
+        writer.add_scalar("Val/Accuracy", val_acc, epoch)
+
+        # Save best model based on validation accuracy
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_model_state = model.state_dict().copy()
+            print(f"New best validation accuracy: {best_val_acc:.4f} - saving model state")
+
+    # Load best model for final test evaluation
+    if best_model_state is not None:
+        print(f"\nLoading best model (validation accuracy: {best_val_acc:.4f}) for final test evaluation")
+        model.load_state_dict(best_model_state)
+    else:
+        print(f"\nNo best model saved, using final epoch model for test evaluation")
+
+    # Final test evaluation
+    test_acc = evaluate(test_loader, model, processor, model.device)
+    total_end_time = time.time()
+    total_duration = total_end_time - total_start_time
+
+    print("\n" + "=" * 50)
+    print("TRAINING COMPLETED")
+    print("=" * 50)
+    print(f"Final Test Accuracy: {test_acc:.4f}")
+    print(f"Best Validation Accuracy: {best_val_acc:.4f}")
+    print(f"Total Training Time: {total_duration:.2f} seconds ({total_duration/60:.2f} minutes)")
+    print(f"Training finished at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    # Log final results
+    writer.add_scalar("Test/Final_Accuracy", test_acc, num_epochs)
+    writer.close()
+
+    # Print label mapping for reference
+    print(f"\nLabel Mapping:")
+    for idx, label in id2label.items():
+        print(f"  {idx}: {label}")
+
+
+if __name__ == "__main__":
+    main()
