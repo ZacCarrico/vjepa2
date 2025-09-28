@@ -1,4 +1,5 @@
 UCF101_subset/
+models/
 ntu_rgb/
 runs/
 **/__pycache__/
