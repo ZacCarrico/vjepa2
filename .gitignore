@@ -1,6 +1,7 @@
 UCF101_subset/
 models/
 ntu_rgb/
+webcam/webcam_clf.log
 runs/
 **/__pycache__/
 *.pyc
