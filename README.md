@@ -66,7 +66,7 @@ vjepa2/
 │
 ├── 📦 DATA & DEPLOYMENT
 │   ├── UCF101_subset/                             # Dataset (train/val/test splits)
-│   └── vjepa2-cloud-run/                          # Cloud deployment configuration
+│   └── cloud-run/                                # Cloud deployment configuration
 └── 🔧 CONFIGURATION
     ├── .gitignore                                 # Git ignore patterns
     └── .venv/                                     # Python virtual environment

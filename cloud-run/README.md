@@ -32,7 +32,7 @@ graph LR
 
 ```bash
 # Clone and navigate to the project
-cd vjepa2-cloud-run
+cd cloud-run
 
 # Start local development server
 ./scripts/run_local.sh
@@ -165,7 +165,7 @@ python3 test_deployed.py
 ## 📁 Project Structure
 
 ```
-vjepa2-cloud-run/
+cloud-run/
 ├── service/                 # Main application
 │   ├── main.py             # FastAPI application
 │   ├── model_handler.py    # V-JEPA2 model wrapper

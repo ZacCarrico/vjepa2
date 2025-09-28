@@ -15,7 +15,7 @@ echo -e "${BLUE}🚀 Starting V-JEPA2 Video Classifier (Local Mode)${NC}"
 
 # Check if we're in the right directory
 if [ ! -f "service/main.py" ]; then
-    echo -e "${RED}❌ Error: Please run this script from the vjepa2-cloud-run directory${NC}"
+    echo -e "${RED}❌ Error: Please run this script from the cloud-run directory${NC}"
     echo "Current directory: $(pwd)"
     echo "Expected files: service/main.py, service/requirements.txt"
     exit 1

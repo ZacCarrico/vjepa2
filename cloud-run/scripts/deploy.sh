@@ -67,7 +67,7 @@ check_prerequisites() {
 
     # Check if we're in the right directory
     if [ ! -f "service/Dockerfile" ]; then
-        echo -e "${RED}❌ Error: Please run this script from the vjepa2-cloud-run directory${NC}"
+        echo -e "${RED}❌ Error: Please run this script from the cloud-run directory${NC}"
         echo "Expected files: service/Dockerfile, service/main.py"
         exit 1
     fi
