@@ -23,11 +23,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class VideoClassifier:
-    def __init__(self, model_path="facebook/vjepa2-vitl-fpc16-256-ssv2"):
+    def __init__(self, model_path=None, use_local_model=True):
         """Initialize the V-JEPA2 video classifier.
 
         Args:
-            model_path: HuggingFace model name or path to local model
+            model_path: Path to local model file or HuggingFace model name
+            use_local_model: If True, load from models/best_action_detection_model_epoch_1.pth
         """
         # Check if required dependencies are available
         if not TRANSFORMERS_AVAILABLE:
@@ -37,33 +38,110 @@ class VideoClassifier:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {self.device}")
 
-        # Load processor
-        logger.info(f"Loading processor from {model_path}")
-        try:
-            self.processor = VJEPA2VideoProcessor.from_pretrained(model_path)
-        except Exception as e:
-            logger.error(f"Failed to load V-JEPA2 processor: {e}")
-            raise ImportError(f"V-JEPA2 model not available: {e}")
+        # Define action detection labels (from fine-tuning script)
+        self.label2id = {
+            "sitting_down": 0,
+            "standing_up": 1,
+            "waving": 2,
+            "other": 3
+        }
+        self.id2label = {v: k for k, v in self.label2id.items()}
 
-        # Load model with appropriate dtype
-        dtype = torch.float16 if self.device == "cuda" else torch.float32
-        logger.info(f"Loading model with dtype: {dtype}")
+        if use_local_model:
+            # Load the fine-tuned local model
+            import os
+            # Get the path relative to the project root (two levels up from cloud-run/service)
+            project_root = os.path.join(os.path.dirname(__file__), '..', '..')
+            local_model_path = os.path.join(project_root, "models/best_action_detection_model_epoch_1.pth")
+            base_model_path = os.path.join(project_root, "models/vjepa2-vitl-fpc16-256-ssv2")
 
-        try:
-            self.model = VJEPA2ForVideoClassification.from_pretrained(
-                model_path,
-                torch_dtype=dtype,
-                device_map="auto" if self.device == "cuda" else None
-            )
+            logger.info(f"Loading fine-tuned model from {local_model_path}")
 
-            if self.device == "cpu":
-                self.model = self.model.to(self.device)
+            # Load processor from local cache
+            try:
+                self.processor = VJEPA2VideoProcessor.from_pretrained(base_model_path)
+                logger.info(f"Loaded processor from {base_model_path}")
+            except Exception as e:
+                logger.error(f"Failed to load processor from local cache: {e}")
+                logger.info("Falling back to HuggingFace download...")
+                self.processor = VJEPA2VideoProcessor.from_pretrained("facebook/vjepa2-vitl-fpc16-256-ssv2")
 
-            self.model.eval()
-            logger.info("V-JEPA2 model loaded and set to eval mode")
-        except Exception as e:
-            logger.error(f"Failed to load V-JEPA2 model: {e}")
-            raise ImportError(f"V-JEPA2 model not available: {e}")
+            # Load base model architecture
+            dtype = torch.float16 if self.device == "cuda" else torch.float32
+            logger.info(f"Loading base model with dtype: {dtype}")
+
+            try:
+                # First try to load from local cache
+                try:
+                    self.model = VJEPA2ForVideoClassification.from_pretrained(
+                        base_model_path,
+                        torch_dtype=dtype,
+                        label2id=self.label2id,
+                        id2label=self.id2label,
+                        ignore_mismatched_sizes=True
+                    )
+                    logger.info(f"Loaded base model from {base_model_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to load from local cache: {e}")
+                    logger.info("Loading base model from HuggingFace...")
+                    self.model = VJEPA2ForVideoClassification.from_pretrained(
+                        "facebook/vjepa2-vitl-fpc16-256-ssv2",
+                        torch_dtype=dtype,
+                        label2id=self.label2id,
+                        id2label=self.id2label,
+                        ignore_mismatched_sizes=True
+                    )
+
+                # Load fine-tuned weights
+                checkpoint = torch.load(local_model_path, map_location=self.device)
+                self.model.load_state_dict(checkpoint['model_state_dict'])
+
+                # Verify label mappings match
+                saved_label2id = checkpoint.get('label2id', {})
+                if saved_label2id != self.label2id:
+                    logger.warning(f"Label mapping mismatch. Model: {saved_label2id}, Expected: {self.label2id}")
+
+                logger.info(f"Loaded fine-tuned weights from {local_model_path}")
+                logger.info(f"Model trained for {checkpoint.get('epoch', 'unknown')} epochs")
+                logger.info(f"Best validation accuracy: {checkpoint.get('validation_accuracy', 'unknown')}")
+
+            except Exception as e:
+                logger.error(f"Failed to load fine-tuned model: {e}")
+                raise ImportError(f"Fine-tuned model not available: {e}")
+
+        else:
+            # Original HuggingFace model loading
+            if model_path is None:
+                model_path = "facebook/vjepa2-vitl-fpc16-256-ssv2"
+
+            # Load processor
+            logger.info(f"Loading processor from {model_path}")
+            try:
+                self.processor = VJEPA2VideoProcessor.from_pretrained(model_path)
+            except Exception as e:
+                logger.error(f"Failed to load V-JEPA2 processor: {e}")
+                raise ImportError(f"V-JEPA2 model not available: {e}")
+
+            # Load model with appropriate dtype
+            dtype = torch.float16 if self.device == "cuda" else torch.float32
+            logger.info(f"Loading model with dtype: {dtype}")
+
+            try:
+                self.model = VJEPA2ForVideoClassification.from_pretrained(
+                    model_path,
+                    torch_dtype=dtype,
+                    device_map="auto" if self.device == "cuda" else None
+                )
+            except Exception as e:
+                logger.error(f"Failed to load V-JEPA2 model: {e}")
+                raise ImportError(f"V-JEPA2 model not available: {e}")
+
+        # Move to device and set to eval mode
+        if self.device == "cpu":
+            self.model = self.model.to(self.device)
+
+        self.model.eval()
+        logger.info("V-JEPA2 model loaded and set to eval mode")
 
     def _extract_frames_opencv(self, video_path: str, frames_per_clip: int) -> tuple:
         """Extract frames using OpenCV as fallback."""
@@ -163,14 +241,17 @@ class VideoClassifier:
 
                 # Get predictions
                 predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
-                top_k_predictions = torch.topk(predictions, k=5)
 
-            # Prepare results
+            # Prepare results - limit to actual number of classes
+            num_classes = len(self.id2label)
+            top_k = min(5, num_classes)
+            top_k_predictions = torch.topk(predictions, k=top_k)
+
             top_classes = []
-            for i in range(5):
+            for i in range(top_k):
                 class_idx = top_k_predictions.indices[0][i].item()
                 confidence = top_k_predictions.values[0][i].item()
-                class_name = self.model.config.id2label.get(class_idx, f"class_{class_idx}")
+                class_name = self.id2label.get(class_idx, f"class_{class_idx}")
 
                 top_classes.append({
                     "class": class_name,
