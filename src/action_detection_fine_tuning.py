@@ -217,14 +217,36 @@ def main():
 
     # Setup model and processor
     model_name = "facebook/vjepa2-vitl-fpc16-256-ssv2"
-    processor = VJEPA2VideoProcessor.from_pretrained(model_name)
-    model = VJEPA2ForVideoClassification.from_pretrained(
-        model_name,
-        torch_dtype=torch.float32,
-        label2id=label2id,
-        id2label=id2label,
-        ignore_mismatched_sizes=True,
-    ).to(device)
+    models_dir = pathlib.Path("models")
+    models_dir.mkdir(exist_ok=True)
+
+    # Check if model already exists locally
+    local_model_path = models_dir / "vjepa2-vitl-fpc16-256-ssv2"
+
+    if local_model_path.exists():
+        print(f"Loading model from local cache: {local_model_path}")
+        processor = VJEPA2VideoProcessor.from_pretrained(local_model_path)
+        model = VJEPA2ForVideoClassification.from_pretrained(
+            local_model_path,
+            torch_dtype=torch.float32,
+            label2id=label2id,
+            id2label=id2label,
+            ignore_mismatched_sizes=True,
+        ).to(device)
+    else:
+        print(f"Downloading and caching model to: {local_model_path}")
+        processor = VJEPA2VideoProcessor.from_pretrained(model_name)
+        model = VJEPA2ForVideoClassification.from_pretrained(
+            model_name,
+            torch_dtype=torch.float32,
+            label2id=label2id,
+            id2label=id2label,
+            ignore_mismatched_sizes=True,
+        ).to(device)
+
+        # Save model and processor locally
+        processor.save_pretrained(local_model_path)
+        model.save_pretrained(local_model_path)
 
     # Print model statistics
     print_parameter_stats(model, "V-JEPA 2 Action Detection Model")
@@ -303,7 +325,18 @@ def main():
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             best_model_state = model.state_dict().copy()
-            print(f"New best validation accuracy: {best_val_acc:.4f} - saving model state")
+            # Save model to disk
+            models_dir = pathlib.Path("models")
+            models_dir.mkdir(exist_ok=True)
+            model_save_path = models_dir / f"best_action_detection_model_epoch_{epoch}.pth"
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': best_model_state,
+                'validation_accuracy': best_val_acc,
+                'label2id': label2id,
+                'id2label': id2label
+            }, model_save_path)
+            print(f"New best validation accuracy: {best_val_acc:.4f} - saved model to {model_save_path}")
 
     # Load best model for final test evaluation
     if best_model_state is not None:
