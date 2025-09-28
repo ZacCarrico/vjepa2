@@ -1,0 +1,34 @@
+# Webcam Monitor Configuration
+
+service:
+  url: "http://localhost:8080"
+  endpoint: "/classify-upload"
+  timeout: 30
+
+camera:
+  # Camera index - will auto-detect Logitech Brio
+  # Set to specific index if auto-detection fails
+  # Currently detected: 0=C270 HD WEBCAM (Logitech), 1=FaceTime HD Camera
+  index: 1
+  # Video capture settings
+  fps: 30
+  width: 640
+  height: 480
+
+capture:
+  # Video duration in seconds
+  duration: 3
+  # Overlap in seconds (time between video starts)
+  overlap: 1
+  # Output format
+  format: "mp4"
+  # Temporary file prefix
+  temp_prefix: "webcam_capture"
+
+logging:
+  # Log file path
+  file: "webcam/webcam_clf.log"
+  # Log level (DEBUG, INFO, WARNING, ERROR)
+  level: "INFO"
+  # Log format
+  format: "%(asctime)s - %(levelname)s - %(message)s"
