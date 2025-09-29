@@ -11,15 +11,15 @@ camera:
   # Currently detected: 0=C270 HD WEBCAM (Logitech), 1=FaceTime HD Camera
   index: 1
   # Video capture settings
-  fps: 30
-  width: 640
-  height: 480
+  fps: 8
+  width: 256
+  height: 256
 
 capture:
   # Video duration in seconds
-  duration: 3
+  duration: 2
   # Overlap in seconds (time between video starts)
-  overlap: 1
+  overlap: 0
   # Output format
   format: "mp4"
   # Temporary file prefix
