@@ -1,4 +1,4 @@
-# Use NVIDIA CUDA base image for GPU support (Cloud Run A100 compatible)
+# Use NVIDIA CUDA base image for GPU support (Cloud Run L4 compatible)
 FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 # Set environment variables

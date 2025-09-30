@@ -65,10 +65,20 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check if we're in the right directory
-    if [ ! -f "service/Dockerfile" ]; then
-        echo -e "${RED}❌ Error: Please run this script from the cloud-run directory${NC}"
+    # Check if we're in the right directory - allow both project root and cloud-run directory
+    if [ -f "service/Dockerfile" ] && [ -f "service/main.py" ]; then
+        # We're in cloud-run directory
+        echo -e "${GREEN}✅ Running from cloud-run directory${NC}"
+    elif [ -f "cloud-run/service/Dockerfile" ] && [ -f "cloud-run/service/main.py" ]; then
+        # We're in project root, change to cloud-run directory
+        echo -e "${GREEN}✅ Running from project root, changing to cloud-run directory${NC}"
+        cd cloud-run
+    else
+        echo -e "${RED}❌ Error: Cannot find required files${NC}"
         echo "Expected files: service/Dockerfile, service/main.py"
+        echo "Please run this script from either:"
+        echo "  - Project root directory (where cloud-run/ exists)"
+        echo "  - cloud-run/ directory (where service/ exists)"
         exit 1
     fi
 
@@ -170,9 +180,14 @@ deploy_to_cloudrun() {
     SERVICE_ACCOUNT="vjepa2-sa"
     SERVICE_ACCOUNT_EMAIL="$SERVICE_ACCOUNT@$PROJECT_ID.iam.gserviceaccount.com"
 
+    # Track deployment type for later display
+    DEPLOYMENT_TYPE=""
+
     # Try with GPU first (alpha), fallback to CPU if not available
-    echo -e "${YELLOW}Attempting GPU deployment...${NC}"
-    if gcloud alpha run deploy $SERVICE_NAME \
+    echo -e "${YELLOW}Attempting GPU deployment with L4...${NC}"
+
+    # Capture the output to check for quota errors
+    GPU_OUTPUT=$(gcloud alpha run deploy $SERVICE_NAME \
         --image $IMAGE_NAME \
         --platform managed \
         --region $REGION \
@@ -180,35 +195,57 @@ deploy_to_cloudrun() {
         --memory 32Gi \
         --cpu 8 \
         --gpu 1 \
-        --gpu-type nvidia-a100 \
+        --gpu-type nvidia-l4 \
         --min-instances 0 \
         --max-instances 4 \
         --timeout 3600 \
         --concurrency 1 \
         --no-allow-unauthenticated \
         --set-env-vars USE_GCS=true \
-        --port 8080 2>/dev/null; then
-        echo -e "${GREEN}✅ GPU deployment successful${NC}"
+        --port 8080 2>&1)
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ GPU deployment successful with L4${NC}"
+        DEPLOYMENT_TYPE="GPU"
     else
-        echo -e "${YELLOW}⚠️  GPU deployment failed, deploying with CPU only...${NC}"
-        gcloud run deploy $SERVICE_NAME \
+        # Check if it's a quota error
+        if echo "$GPU_OUTPUT" | grep -q "Quota exceeded"; then
+            echo -e "${YELLOW}⚠️  GPU quota exceeded. Attempting CPU-only deployment...${NC}"
+        else
+            echo -e "${YELLOW}⚠️  GPU deployment failed. Attempting CPU-only deployment...${NC}"
+            echo -e "${YELLOW}Error: ${GPU_OUTPUT}${NC}"
+        fi
+
+        # Deploy with CPU only - use lower memory for CPU-only deployment
+        echo -e "${YELLOW}Deploying with CPU configuration (reduced memory)...${NC}"
+        if gcloud run deploy $SERVICE_NAME \
             --image $IMAGE_NAME \
             --platform managed \
             --region $REGION \
             --service-account $SERVICE_ACCOUNT_EMAIL \
-            --memory 32Gi \
-            --cpu 8 \
+            --memory 16Gi \
+            --cpu 4 \
             --min-instances 0 \
-            --max-instances 4 \
+            --max-instances 2 \
             --timeout 3600 \
             --concurrency 1 \
             --no-allow-unauthenticated \
             --set-env-vars USE_GCS=true \
-            --port 8080
-        echo -e "${YELLOW}⚠️  Service deployed with CPU only due to GPU quota limitations${NC}"
+            --port 8080; then
+            echo -e "${YELLOW}⚠️  Service deployed with CPU only (4 vCPUs, 16GB RAM)${NC}"
+            echo -e "${YELLOW}Note: Performance will be slower without GPU acceleration${NC}"
+            DEPLOYMENT_TYPE="CPU"
+        else
+            echo -e "${RED}❌ Deployment failed for both GPU and CPU configurations${NC}"
+            echo -e "${RED}Please check your quotas and container image${NC}"
+            exit 1
+        fi
     fi
 
     echo -e "${GREEN}✅ Service deployed successfully${NC}"
+
+    # Export for use in show_deployment_info
+    export DEPLOYMENT_TYPE
 }
 
 show_deployment_info() {
@@ -223,13 +260,24 @@ show_deployment_info() {
     echo -e "${BLUE}Service Account: $SERVICE_ACCOUNT_EMAIL${NC}"
     echo ""
 
-    # Display resource configuration
+    # Display resource configuration based on deployment type
     echo -e "${YELLOW}📊 Resource Configuration:${NC}"
-    echo -e "  - CPU: 8 vCPUs"
-    echo -e "  - Memory: 32 GiB"
-    echo -e "  - GPU: 1x NVIDIA A100"
-    echo -e "  - Min Instances: 0 (scales to zero)"
-    echo -e "  - Max Instances: 4"
+    if [ "$DEPLOYMENT_TYPE" = "GPU" ]; then
+        echo -e "  - CPU: 8 vCPUs"
+        echo -e "  - Memory: 32 GiB"
+        echo -e "  - GPU: 1x NVIDIA L4"
+        echo -e "  - Min Instances: 0 (scales to zero)"
+        echo -e "  - Max Instances: 4"
+    else
+        echo -e "  - CPU: 4 vCPUs (CPU-only mode)"
+        echo -e "  - Memory: 16 GiB"
+        echo -e "  - GPU: None (quota exceeded)"
+        echo -e "  - Min Instances: 0 (scales to zero)"
+        echo -e "  - Max Instances: 2"
+        echo ""
+        echo -e "${YELLOW}⚠️  Note: Running in CPU-only mode. Performance will be slower.${NC}"
+        echo -e "${YELLOW}   To enable GPU, request increased GPU quota in GCP Console.${NC}"
+    fi
     echo -e "  - Timeout: 60 minutes"
     echo ""
 }

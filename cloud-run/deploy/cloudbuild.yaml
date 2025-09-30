@@ -41,7 +41,7 @@ steps:
       - '--gpu'
       - '1'
       - '--gpu-type'
-      - 'nvidia-a100'
+      - 'nvidia-l4'
       - '--min-instances'
       - '0'
       - '--max-instances'
