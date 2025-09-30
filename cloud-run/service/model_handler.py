@@ -71,30 +71,33 @@ class VideoClassifier:
 
             logger.info(f"Loading fine-tuned model from {fine_tuned_model_path}")
 
-            # Load processor from HuggingFace
-            logger.info("Loading processor from HuggingFace...")
-            self.processor = VJEPA2VideoProcessor.from_pretrained("facebook/vjepa2-vitl-fpc16-256-ssv2")
-
-            # Load base model architecture from HuggingFace
-            dtype = torch.float16 if self.device == "cuda" else torch.float32
-            logger.info(f"Loading base model from HuggingFace with dtype: {dtype}")
-
-            self.model = VJEPA2ForVideoClassification.from_pretrained(
-                "facebook/vjepa2-vitl-fpc16-256-ssv2",
-                torch_dtype=dtype,
-                label2id=self.label2id,
-                id2label=self.id2label,
-                ignore_mismatched_sizes=True
-            )
-
-            # Load fine-tuned weights from GCS
+            # Load checkpoint first to get the full model
             checkpoint = torch.load(fine_tuned_model_path, map_location=self.device)
-            self.model.load_state_dict(checkpoint['model_state_dict'])
 
             # Verify label mappings match
             saved_label2id = checkpoint.get('label2id', {})
             if saved_label2id != self.label2id:
                 logger.warning(f"Label mapping mismatch. Model: {saved_label2id}, Expected: {self.label2id}")
+
+            # Create processor with default config
+            logger.info("Initializing processor with default configuration...")
+            from transformers import VJEPA2Config
+            config = VJEPA2Config(
+                num_labels=len(self.label2id),
+                label2id=self.label2id,
+                id2label=self.id2label
+            )
+            self.processor = VJEPA2VideoProcessor()
+
+            # Create model architecture with our config
+            dtype = torch.float16 if self.device == "cuda" else torch.float32
+            logger.info(f"Creating model architecture with dtype: {dtype}")
+
+            self.model = VJEPA2ForVideoClassification(config)
+            self.model = self.model.to(dtype)
+
+            # Load fine-tuned weights
+            self.model.load_state_dict(checkpoint['model_state_dict'])
 
             logger.info(f"Loaded fine-tuned weights from {fine_tuned_model_path}")
             logger.info(f"Model trained for {checkpoint.get('epoch', 'unknown')} epochs")
