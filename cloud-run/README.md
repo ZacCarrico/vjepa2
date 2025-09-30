@@ -1,6 +1,6 @@
 # V-JEPA2 Video Classifier on Google Cloud Run
 
-Deploy a V-JEPA2 video classification model on Google Cloud Run with GPU support (A100) for scalable video analysis.
+Deploy a V-JEPA2 video classification model on Google Cloud Run with GPU support (L4) for scalable video analysis.
 
 ## 🎯 Overview
 
@@ -9,7 +9,7 @@ This project provides a complete deployment solution for the V-JEPA2 (Video Join
 - **FastAPI service** with video classification endpoints
 - **Local testing** capabilities (CPU/GPU support)
 - **GCS integration** for video storage
-- **Cloud Run deployment** with A100 GPU
+- **Cloud Run deployment** with L4 GPU
 - **Docker containerization** for consistent environments
 - **Comprehensive testing** suite
 
@@ -89,7 +89,7 @@ python3 tests/test_local.py
 
 - **CPU**: 8 vCPUs
 - **Memory**: 32 GiB
-- **GPU**: 1x NVIDIA A100
+- **GPU**: 1x NVIDIA L4
 - **Scaling**: 0-4 instances
 - **Timeout**: 60 minutes
 - **Concurrency**: 1 request per instance
@@ -209,7 +209,7 @@ docker run --gpus all nvidia/cuda:11.8-runtime-ubuntu22.04 nvidia-smi
 ## 💰 Cost Optimization
 
 - **Scale to Zero**: Min instances = 0
-- **GPU Efficiency**: A100 for fast inference
+- **GPU Efficiency**: L4 for fast inference
 - **Concurrent Requests**: Limit = 1 per instance for optimal GPU utilization
 - **Request Timeouts**: 60 minutes maximum
 - **Storage**: Use GCS lifecycle policies for old videos

@@ -1,4 +1,5 @@
 import os
+import tempfile
 import logging
 import numpy as np
 import torch
@@ -23,12 +24,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class VideoClassifier:
-    def __init__(self, model_path=None, use_local_model=True):
+    def __init__(self, model_path=None, use_local_model=True, use_gcs=None):
         """Initialize the V-JEPA2 video classifier.
 
         Args:
             model_path: Path to local model file or HuggingFace model name
             use_local_model: If True, load from models/best_action_detection_model_epoch_1.pth
+            use_gcs: If True, download model from GCS when not available locally
         """
         # Check if required dependencies are available
         if not TRANSFORMERS_AVAILABLE:
@@ -37,6 +39,22 @@ class VideoClassifier:
         # Use CPU for local testing if no GPU available
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Using device: {self.device}")
+
+        # Check GCS usage
+        if use_gcs is None:
+            use_gcs = os.getenv("USE_GCS", "false").lower() == "true"
+        self.use_gcs = use_gcs
+        logger.info(f"GCS enabled: {self.use_gcs}")
+
+        # Import GCS utils if needed
+        if self.use_gcs:
+            try:
+                from gcs_utils import download_from_gcs
+                self._download_from_gcs = download_from_gcs
+                logger.info("GCS utilities loaded successfully")
+            except ImportError as e:
+                logger.warning(f"Failed to import GCS utilities: {e}")
+                self.use_gcs = False
 
         # Define action detection labels (from fine-tuning script)
         self.label2id = {
@@ -48,66 +66,39 @@ class VideoClassifier:
         self.id2label = {v: k for k, v in self.label2id.items()}
 
         if use_local_model:
-            # Load the fine-tuned local model
-            import os
-            # Get the path relative to the project root (two levels up from cloud-run/service)
-            project_root = os.path.join(os.path.dirname(__file__), '..', '..')
-            local_model_path = os.path.join(project_root, "models/best_action_detection_model_epoch_1.pth")
-            base_model_path = os.path.join(project_root, "models/vjepa2-vitl-fpc16-256-ssv2")
+            # Load the fine-tuned model from GCS
+            fine_tuned_model_path = self._get_model_path()
 
-            logger.info(f"Loading fine-tuned model from {local_model_path}")
+            logger.info(f"Loading fine-tuned model from {fine_tuned_model_path}")
 
-            # Load processor from local cache
-            try:
-                self.processor = VJEPA2VideoProcessor.from_pretrained(base_model_path)
-                logger.info(f"Loaded processor from {base_model_path}")
-            except Exception as e:
-                logger.error(f"Failed to load processor from local cache: {e}")
-                logger.info("Falling back to HuggingFace download...")
-                self.processor = VJEPA2VideoProcessor.from_pretrained("facebook/vjepa2-vitl-fpc16-256-ssv2")
+            # Load processor from HuggingFace
+            logger.info("Loading processor from HuggingFace...")
+            self.processor = VJEPA2VideoProcessor.from_pretrained("facebook/vjepa2-vitl-fpc16-256-ssv2")
 
-            # Load base model architecture
+            # Load base model architecture from HuggingFace
             dtype = torch.float16 if self.device == "cuda" else torch.float32
-            logger.info(f"Loading base model with dtype: {dtype}")
+            logger.info(f"Loading base model from HuggingFace with dtype: {dtype}")
 
-            try:
-                # First try to load from local cache
-                try:
-                    self.model = VJEPA2ForVideoClassification.from_pretrained(
-                        base_model_path,
-                        torch_dtype=dtype,
-                        label2id=self.label2id,
-                        id2label=self.id2label,
-                        ignore_mismatched_sizes=True
-                    )
-                    logger.info(f"Loaded base model from {base_model_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to load from local cache: {e}")
-                    logger.info("Loading base model from HuggingFace...")
-                    self.model = VJEPA2ForVideoClassification.from_pretrained(
-                        "facebook/vjepa2-vitl-fpc16-256-ssv2",
-                        torch_dtype=dtype,
-                        label2id=self.label2id,
-                        id2label=self.id2label,
-                        ignore_mismatched_sizes=True
-                    )
+            self.model = VJEPA2ForVideoClassification.from_pretrained(
+                "facebook/vjepa2-vitl-fpc16-256-ssv2",
+                torch_dtype=dtype,
+                label2id=self.label2id,
+                id2label=self.id2label,
+                ignore_mismatched_sizes=True
+            )
 
-                # Load fine-tuned weights
-                checkpoint = torch.load(local_model_path, map_location=self.device)
-                self.model.load_state_dict(checkpoint['model_state_dict'])
+            # Load fine-tuned weights from GCS
+            checkpoint = torch.load(fine_tuned_model_path, map_location=self.device)
+            self.model.load_state_dict(checkpoint['model_state_dict'])
 
-                # Verify label mappings match
-                saved_label2id = checkpoint.get('label2id', {})
-                if saved_label2id != self.label2id:
-                    logger.warning(f"Label mapping mismatch. Model: {saved_label2id}, Expected: {self.label2id}")
+            # Verify label mappings match
+            saved_label2id = checkpoint.get('label2id', {})
+            if saved_label2id != self.label2id:
+                logger.warning(f"Label mapping mismatch. Model: {saved_label2id}, Expected: {self.label2id}")
 
-                logger.info(f"Loaded fine-tuned weights from {local_model_path}")
-                logger.info(f"Model trained for {checkpoint.get('epoch', 'unknown')} epochs")
-                logger.info(f"Best validation accuracy: {checkpoint.get('validation_accuracy', 'unknown')}")
-
-            except Exception as e:
-                logger.error(f"Failed to load fine-tuned model: {e}")
-                raise ImportError(f"Fine-tuned model not available: {e}")
+            logger.info(f"Loaded fine-tuned weights from {fine_tuned_model_path}")
+            logger.info(f"Model trained for {checkpoint.get('epoch', 'unknown')} epochs")
+            logger.info(f"Best validation accuracy: {checkpoint.get('validation_accuracy', 'unknown')}")
 
         else:
             # Original HuggingFace model loading
@@ -143,6 +134,47 @@ class VideoClassifier:
         self.model.eval()
         logger.info("V-JEPA2 model loaded and set to eval mode")
 
+    def _get_model_path(self) -> str:
+        """Get path to fine-tuned model, downloading from GCS if needed and available."""
+        # For Cloud Run, use /tmp which is writable
+        # For local development, try to use the models directory
+        if self.use_gcs:
+            # In Cloud Run, use /tmp which is writable by non-root users
+            local_model_path = "/tmp/best_action_detection_model_epoch_1.pth"
+        else:
+            # Check if model exists in current directory (for Docker local testing)
+            current_dir_model = os.path.join(os.path.dirname(__file__), "best_action_detection_model_epoch_1.pth")
+            if os.path.exists(current_dir_model):
+                local_model_path = current_dir_model
+            else:
+                # For local development, use the project structure
+                project_root = os.path.join(os.path.dirname(__file__), '..', '..')
+                local_model_path = os.path.join(project_root, "models/best_action_detection_model_epoch_1.pth")
+
+        # If file exists locally, use it
+        if os.path.exists(local_model_path):
+            logger.info(f"Using cached model: {local_model_path}")
+            return local_model_path
+
+        # If GCS is enabled and file doesn't exist locally, try to download
+        if self.use_gcs:
+            try:
+                logger.info("Model not found in cache, downloading from GCS...")
+                gcs_model_uri = "gs://vjepa2/model-artifacts/best_action_detection_model_epoch_1.pth"
+
+                # Download from GCS directly to the path (no need to create directory for /tmp)
+                self._download_from_gcs(gcs_model_uri, local_model_path)
+                logger.info(f"Successfully downloaded model from GCS to {local_model_path}")
+                return local_model_path
+
+            except Exception as e:
+                logger.error(f"Failed to download model from GCS: {e}")
+                raise FileNotFoundError(f"Failed to download model from GCS: {e}")
+
+        # If we reach here, the model is not available
+        raise FileNotFoundError(f"Fine-tuned model not found: {local_model_path}")
+
+
     def _extract_frames_opencv(self, video_path: str, frames_per_clip: int) -> tuple:
         """Extract frames using OpenCV as fallback."""
         cap = cv2.VideoCapture(video_path)
@@ -169,15 +201,13 @@ class VideoClassifier:
 
         cap.release()
 
-        # Convert to tensor format expected by transformers
-        if frames:
-            frames_tensor = torch.stack([torch.tensor(frame).permute(2, 0, 1) for frame in frames])
-            # Add batch dimension: (1, frames, channels, height, width)
-            frames_tensor = frames_tensor.unsqueeze(0)
-        else:
+        if not frames:
             raise ValueError("No frames extracted from video")
 
-        return frames_tensor, duration
+        # Return frames as a list of numpy arrays for the processor
+        # The processor will handle the conversion to tensors
+        # This matches what torchcodec returns
+        return frames, duration
 
     def _extract_frames_torchcodec(self, video_path: str, frames_per_clip: int) -> tuple:
         """Extract frames using torchcodec if available."""
@@ -211,27 +241,25 @@ class VideoClassifier:
             if TORCHCODEC_AVAILABLE:
                 logger.info("Using torchcodec for video processing")
                 clip, duration = self._extract_frames_torchcodec(video_path, frames_per_clip)
+                # Log shape for tensor
+                logger.info(f"Extracted clip shape: {clip.shape}, Duration: {duration:.2f}s")
             else:
                 logger.info("Using OpenCV for video processing")
                 clip, duration = self._extract_frames_opencv(video_path, frames_per_clip)
-
-            logger.info(f"Extracted clip shape: {clip.shape}, Duration: {duration:.2f}s")
+                # Log info for list of frames
+                if isinstance(clip, list):
+                    logger.info(f"Extracted {len(clip)} frames, shape: {clip[0].shape if clip else 'empty'}, Duration: {duration:.2f}s")
+                else:
+                    logger.info(f"Extracted clip shape: {clip.shape if hasattr(clip, 'shape') else type(clip)}, Duration: {duration:.2f}s")
 
             # Run inference
             with torch.no_grad():
                 # Process video frames - handle different input formats
-                try:
-                    if hasattr(self.processor, 'process_video'):
-                        # If processor has specific video processing method
-                        inputs = self.processor.process_video(clip, return_tensors="pt")
-                    else:
-                        # Try standard processing
-                        inputs = self.processor(clip, return_tensors="pt")
-                except Exception as e:
-                    logger.warning(f"Processor failed with tensor input: {e}")
-                    # Convert tensor to numpy for processor
-                    clip_np = clip.cpu().numpy() if torch.is_tensor(clip) else clip
-                    inputs = self.processor(clip_np, return_tensors="pt")
+                # The processor expects either:
+                # - A list of numpy arrays (from OpenCV)
+                # - A tensor (from torchcodec)
+                # - A list of PIL images
+                inputs = self.processor(clip, return_tensors="pt")
 
                 # Move to device
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
@@ -263,7 +291,7 @@ class VideoClassifier:
                 "predictions": predictions.cpu().numpy().tolist(),
                 "top_class": top_classes[0]["class"],
                 "top_k_classes": top_classes,
-                "frames_processed": len(clip[0]) if torch.is_tensor(clip) else frames_per_clip,
+                "frames_processed": len(clip) if isinstance(clip, list) else (len(clip[0]) if torch.is_tensor(clip) else frames_per_clip),
                 "device_used": self.device,
                 "video_duration": duration
             }

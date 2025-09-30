@@ -56,7 +56,7 @@ async def startup_event():
     global classifier
     try:
         logger.info("Initializing V-JEPA2 classifier...")
-        classifier = VideoClassifier()
+        classifier = VideoClassifier(use_gcs=USE_GCS)
         logger.info("Classifier initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize classifier: {e}")
