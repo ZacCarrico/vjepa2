@@ -14,6 +14,7 @@ import requests
 import signal
 import sys
 import subprocess
+import numpy as np
 from io import BytesIO
 from datetime import datetime
 from typing import Optional, Dict, Any, Union
@@ -40,6 +41,7 @@ class WebcamMonitor:
 
         # Performance optimizations
         self.use_memory_buffer = self.config.get('optimizations', {}).get('use_memory_buffer', False)
+        self.use_raw_frames = self.config.get('optimizations', {}).get('use_raw_frames', False)
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -176,7 +178,7 @@ class WebcamMonitor:
         return True
 
     def capture_video(self, duration: float) -> tuple:
-        """Capture video for specified duration and return temp file path/buffer and capture time"""
+        """Capture video for specified duration and return temp file path/buffer/frames and capture time"""
         if not self.camera or not self.camera.isOpened():
             raise RuntimeError("Camera not initialized")
 
@@ -194,7 +196,36 @@ class WebcamMonitor:
 
         self.logger.debug(f"Starting video capture: {frames_to_capture} frames at {fps} fps")
 
-        if self.use_memory_buffer:
+        if self.use_raw_frames:
+            # Capture frames directly as numpy array (no video encoding)
+            frames = []
+            while frames_captured < frames_to_capture and self.running:
+                ret, frame = self.camera.read()
+                if ret:
+                    # Resize frame if needed
+                    if self.needs_resize:
+                        frame = cv2.resize(frame, (output_width, output_height))
+
+                    # Convert BGR to RGB (model expects RGB)
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    frames.append(frame_rgb)
+                    frames_captured += 1
+                else:
+                    self.logger.warning("Failed to capture frame")
+                    break
+
+            # Stack into numpy array
+            frames_array = np.array(frames, dtype=np.uint8)
+
+            capture_time = time.time() - capture_start
+
+            if self.enable_profiling:
+                self.profiling_stats['capture_times'].append(capture_time)
+                self.logger.debug(f"Frames captured to memory: {frames_captured} frames in {capture_time:.3f}s")
+
+            return frames_array, capture_time
+
+        elif self.use_memory_buffer:
             # Capture frames to memory
             frames = []
             while frames_captured < frames_to_capture and self.running:
@@ -266,11 +297,11 @@ class WebcamMonitor:
 
             return temp_path, capture_time
 
-    def send_to_service(self, video_source: Union[str, BytesIO]) -> tuple:
-        """Send video to vjepa2 service for classification and return result with timing
+    def send_to_service(self, video_source: Union[str, BytesIO, np.ndarray]) -> tuple:
+        """Send video/frames to vjepa2 service for classification and return result with timing
 
         Args:
-            video_source: Either a file path (str) or BytesIO buffer
+            video_source: Either a file path (str), BytesIO buffer, or numpy array of frames
         """
         service_config = self.config.get('service', {})
         mode = service_config.get('mode', 'local')
@@ -281,7 +312,13 @@ class WebcamMonitor:
         else:
             base_url = service_config.get('local_url', 'http://localhost:8080')
 
-        url = f"{base_url}{service_config['endpoint']}"
+        # Select endpoint based on data type
+        if isinstance(video_source, np.ndarray):
+            endpoint = '/classify-frames'
+        else:
+            endpoint = service_config['endpoint']
+
+        url = f"{base_url}{endpoint}"
         timeout = service_config.get('timeout', 30)
 
         upload_start = time.time()
@@ -297,26 +334,36 @@ class WebcamMonitor:
                     self.logger.info("Obtained authentication token")
                 headers = {"Authorization": f"Bearer {self.auth_token}"}
 
-            # Get file content from either source
+            # Get file content from source
             read_start = time.time()
-            if isinstance(video_source, BytesIO):
+            if isinstance(video_source, np.ndarray):
+                # Convert numpy array to bytes
+                buffer = BytesIO()
+                np.save(buffer, video_source)
+                buffer.seek(0)
+                file_content = buffer.read()
+                filename = 'webcam_frames.npy'
+                content_type = 'application/octet-stream'
+            elif isinstance(video_source, BytesIO):
                 video_source.seek(0)  # Reset to beginning
                 file_content = video_source.read()
                 filename = 'webcam_capture.mp4'
+                content_type = 'video/mp4'
             else:
                 with open(video_source, 'rb') as f:
                     file_content = f.read()
                 filename = os.path.basename(video_source)
+                content_type = 'video/mp4'
             file_read_time = time.time() - read_start
 
             # Get frames_per_clip from config
             frames_per_clip = self.config.get('capture', {}).get('frames_per_clip', 16)
 
             # Measure network time
-            files = {'file': (filename, file_content, 'video/mp4')}
+            files = {'file': (filename, file_content, content_type)}
             data = {'frames_per_clip': frames_per_clip}
 
-            self.logger.debug(f"Sending video to {url} (mode: {mode})")
+            self.logger.debug(f"Sending to {url} (mode: {mode}, type: {type(video_source).__name__})")
             network_start = time.time()
             response = requests.post(url, headers=headers, files=files, data=data, timeout=timeout)
             network_time = time.time() - network_start
@@ -341,11 +388,14 @@ class WebcamMonitor:
             self.logger.error(f"Unexpected error sending video: {e}")
             return None, 0, file_read_time, network_time
 
-    def cleanup_temp_file(self, file_source: Union[str, BytesIO]) -> float:
-        """Clean up temporary video file/buffer and return cleanup time"""
+    def cleanup_temp_file(self, file_source: Union[str, BytesIO, np.ndarray]) -> float:
+        """Clean up temporary video file/buffer/array and return cleanup time"""
         cleanup_start = time.time()
         try:
-            if isinstance(file_source, BytesIO):
+            if isinstance(file_source, np.ndarray):
+                # Numpy arrays will be garbage collected
+                pass
+            elif isinstance(file_source, BytesIO):
                 file_source.close()
             else:
                 os.unlink(file_source)

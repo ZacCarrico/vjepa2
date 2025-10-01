@@ -2,7 +2,8 @@ import os
 import tempfile
 import logging
 import time
-from typing import Optional
+import numpy as np
+from typing import Optional, List
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -192,6 +193,101 @@ async def classify_upload(
         # Clean up temporary file
         if temp_path and os.path.exists(temp_path):
             os.unlink(temp_path)
+
+@app.post("/classify-frames", response_model=VideoResponse)
+async def classify_frames(
+    file: UploadFile = File(...),
+    frames_per_clip: int = 8
+):
+    """Classify from raw numpy frames (bypasses video encoding/decoding)
+
+    Expects a .npy file containing numpy array of shape (N, H, W, 3) where:
+    - N = number of frames
+    - H, W = frame height and width
+    - 3 = RGB channels
+    """
+    if classifier is None:
+        raise HTTPException(status_code=503, detail="Classifier not initialized")
+
+    start_time = time.time()
+
+    try:
+        # Read uploaded numpy file
+        content = await file.read()
+
+        # Load numpy array from bytes
+        import io
+        frames = np.load(io.BytesIO(content))
+
+        logger.info(f"Received frames array: shape={frames.shape}, dtype={frames.dtype}")
+
+        # Validate shape
+        if len(frames.shape) != 4:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid frames shape: {frames.shape}. Expected (N, H, W, 3)"
+            )
+
+        if frames.shape[-1] != 3:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid number of channels: {frames.shape[-1]}. Expected 3 (RGB)"
+            )
+
+        # Sample frames if we have more than requested
+        num_frames = frames.shape[0]
+        if num_frames > frames_per_clip:
+            # Uniformly sample frames
+            indices = np.linspace(0, num_frames - 1, frames_per_clip, dtype=int)
+            frames = frames[indices]
+
+        # Convert to list of numpy arrays (format expected by model)
+        frames_list = [frames[i] for i in range(frames.shape[0])]
+
+        # Assume duration based on typical frame rate (30fps)
+        duration = num_frames / 30.0
+
+        # Run inference directly with frames (bypass video decode)
+        import torch
+        with torch.no_grad():
+            inputs = classifier.processor(frames_list, return_tensors="pt")
+            inputs = {k: v.to(classifier.device) for k, v in inputs.items()}
+            outputs = classifier.model(**inputs)
+            predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+
+        # Prepare results
+        num_classes = len(classifier.id2label)
+        top_k = min(5, num_classes)
+        top_k_predictions = torch.topk(predictions, k=top_k)
+
+        top_classes = []
+        for i in range(top_k):
+            class_idx = top_k_predictions.indices[0][i].item()
+            confidence = top_k_predictions.values[0][i].item()
+            class_name = classifier.id2label.get(class_idx, f"class_{class_idx}")
+
+            top_classes.append({
+                "class": class_name,
+                "confidence": float(confidence),
+                "class_id": class_idx
+            })
+
+        result = {
+            "predictions": predictions.cpu().numpy().tolist(),
+            "top_class": top_classes[0]["class"],
+            "top_k_classes": top_classes,
+            "frames_processed": len(frames_list),
+            "device_used": classifier.device,
+            "video_duration": duration,
+            "processing_time": time.time() - start_time
+        }
+
+        logger.info(f"Frames classification completed in {result['processing_time']:.3f}s")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error processing frames: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/info")
 async def get_info():

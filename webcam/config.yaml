@@ -50,3 +50,6 @@ profiling:
 optimizations:
   # Use in-memory buffer instead of temp files (faster, uses more RAM)
   use_memory_buffer: true
+  # Use raw frames mode (bypasses video encoding/decoding - fastest!)
+  # Requires /classify-frames endpoint support on server
+  use_raw_frames: false
