@@ -14,8 +14,9 @@ import requests
 import signal
 import sys
 import subprocess
+from io import BytesIO
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 
 
 class WebcamMonitor:
@@ -25,6 +26,20 @@ class WebcamMonitor:
         self.camera = None
         self.running = False
         self.auth_token = None
+
+        # Performance profiling
+        self.enable_profiling = self.config.get('profiling', {}).get('enabled', False)
+        self.profiling_stats = {
+            'capture_times': [],
+            'upload_times': [],
+            'network_times': [],
+            'processing_times': [],
+            'cleanup_times': [],
+            'total_times': []
+        }
+
+        # Performance optimizations
+        self.use_memory_buffer = self.config.get('optimizations', {}).get('use_memory_buffer', False)
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -134,64 +149,129 @@ class WebcamMonitor:
 
         # Set camera properties
         camera_config = self.config.get('camera', {})
-        self.camera.set(cv2.CAP_PROP_FPS, camera_config.get('fps', 30))
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, camera_config.get('width', 640))
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, camera_config.get('height', 480))
+        target_fps = camera_config.get('fps', 30)
+        target_width = camera_config.get('width', 640)
+        target_height = camera_config.get('height', 480)
+
+        # Set properties multiple times for better compatibility
+        for _ in range(3):
+            self.camera.set(cv2.CAP_PROP_FPS, target_fps)
+            self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, target_width)
+            self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, target_height)
 
         # Verify final settings
         actual_fps = self.camera.get(cv2.CAP_PROP_FPS)
         actual_width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
+        # If camera doesn't support target resolution, we'll resize in capture
+        self.needs_resize = (actual_width != target_width or actual_height != target_height)
+        self.target_width = target_width
+        self.target_height = target_height
+
         self.logger.info(f"Camera initialized at index {camera_index}: {actual_width}x{actual_height} @ {actual_fps:.1f}fps")
+        if self.needs_resize:
+            self.logger.info(f"Will resize frames to {target_width}x{target_height} (camera doesn't support target resolution)")
+
         return True
 
-    def capture_video(self, duration: float) -> str:
-        """Capture video for specified duration and return temp file path"""
+    def capture_video(self, duration: float) -> tuple:
+        """Capture video for specified duration and return temp file path/buffer and capture time"""
         if not self.camera or not self.camera.isOpened():
             raise RuntimeError("Camera not initialized")
 
-        # Create temporary file
-        temp_file = tempfile.NamedTemporaryFile(
-            suffix=f".{self.config['capture']['format']}",
-            prefix=self.config['capture']['temp_prefix'],
-            delete=False
-        )
-        temp_path = temp_file.name
-        temp_file.close()
+        capture_start = time.time()
 
         # Get camera properties
         fps = self.camera.get(cv2.CAP_PROP_FPS)
-        width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-        # Setup video writer
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(temp_path, fourcc, fps, (width, height))
+        # Use target resolution for output
+        output_width = self.target_width
+        output_height = self.target_height
 
         frames_to_capture = int(fps * duration)
         frames_captured = 0
 
         self.logger.debug(f"Starting video capture: {frames_to_capture} frames at {fps} fps")
 
-        start_time = time.time()
-        while frames_captured < frames_to_capture and self.running:
-            ret, frame = self.camera.read()
-            if ret:
+        if self.use_memory_buffer:
+            # Capture frames to memory
+            frames = []
+            while frames_captured < frames_to_capture and self.running:
+                ret, frame = self.camera.read()
+                if ret:
+                    # Resize frame if needed
+                    if self.needs_resize:
+                        frame = cv2.resize(frame, (output_width, output_height))
+                    frames.append(frame)
+                    frames_captured += 1
+                else:
+                    self.logger.warning("Failed to capture frame")
+                    break
+
+            # Encode to MP4 in memory
+            temp_path = tempfile.mktemp(suffix='.mp4')
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(temp_path, fourcc, fps, (output_width, output_height))
+            for frame in frames:
                 out.write(frame)
-                frames_captured += 1
-            else:
-                self.logger.warning("Failed to capture frame")
-                break
+            out.release()
 
-        out.release()
-        actual_duration = time.time() - start_time
+            # Read encoded video into memory buffer
+            with open(temp_path, 'rb') as f:
+                buffer = BytesIO(f.read())
+            os.unlink(temp_path)  # Clean up temp file immediately
 
-        self.logger.debug(f"Video captured: {frames_captured} frames in {actual_duration:.2f}s")
-        return temp_path
+            capture_time = time.time() - capture_start
 
-    def send_to_service(self, video_path: str) -> Optional[Dict[str, Any]]:
-        """Send video to vjepa2 service for classification"""
+            if self.enable_profiling:
+                self.profiling_stats['capture_times'].append(capture_time)
+                self.logger.debug(f"Video captured to memory: {frames_captured} frames in {capture_time:.3f}s")
+
+            return buffer, capture_time
+
+        else:
+            # Original file-based approach
+            temp_file = tempfile.NamedTemporaryFile(
+                suffix=f".{self.config['capture']['format']}",
+                prefix=self.config['capture']['temp_prefix'],
+                delete=False
+            )
+            temp_path = temp_file.name
+            temp_file.close()
+
+            # Setup video writer
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(temp_path, fourcc, fps, (output_width, output_height))
+
+            while frames_captured < frames_to_capture and self.running:
+                ret, frame = self.camera.read()
+                if ret:
+                    # Resize frame if needed
+                    if self.needs_resize:
+                        frame = cv2.resize(frame, (output_width, output_height))
+
+                    out.write(frame)
+                    frames_captured += 1
+                else:
+                    self.logger.warning("Failed to capture frame")
+                    break
+
+            out.release()
+            capture_time = time.time() - capture_start
+
+            if self.enable_profiling:
+                self.profiling_stats['capture_times'].append(capture_time)
+                self.logger.debug(f"Video captured: {frames_captured} frames in {capture_time:.3f}s")
+
+            return temp_path, capture_time
+
+    def send_to_service(self, video_source: Union[str, BytesIO]) -> tuple:
+        """Send video to vjepa2 service for classification and return result with timing
+
+        Args:
+            video_source: Either a file path (str) or BytesIO buffer
+        """
         service_config = self.config.get('service', {})
         mode = service_config.get('mode', 'local')
 
@@ -204,6 +284,10 @@ class WebcamMonitor:
         url = f"{base_url}{service_config['endpoint']}"
         timeout = service_config.get('timeout', 30)
 
+        upload_start = time.time()
+        file_read_time = 0
+        network_time = 0
+
         try:
             # Only use authentication for Cloud Run
             headers = {}
@@ -213,32 +297,69 @@ class WebcamMonitor:
                     self.logger.info("Obtained authentication token")
                 headers = {"Authorization": f"Bearer {self.auth_token}"}
 
-            with open(video_path, 'rb') as f:
-                files = {'file': (os.path.basename(video_path), f, 'video/mp4')}
-                data = {'frames_per_clip': 16}
+            # Get file content from either source
+            read_start = time.time()
+            if isinstance(video_source, BytesIO):
+                video_source.seek(0)  # Reset to beginning
+                file_content = video_source.read()
+                filename = 'webcam_capture.mp4'
+            else:
+                with open(video_source, 'rb') as f:
+                    file_content = f.read()
+                filename = os.path.basename(video_source)
+            file_read_time = time.time() - read_start
 
-                self.logger.debug(f"Sending video to {url} (mode: {mode})")
-                response = requests.post(url, headers=headers, files=files, data=data, timeout=timeout)
-                response.raise_for_status()
+            # Get frames_per_clip from config
+            frames_per_clip = self.config.get('capture', {}).get('frames_per_clip', 16)
 
-                result = response.json()
-                self.logger.info(f"Classification result: {result.get('top_class', 'unknown')}")
-                return result
+            # Measure network time
+            files = {'file': (filename, file_content, 'video/mp4')}
+            data = {'frames_per_clip': frames_per_clip}
+
+            self.logger.debug(f"Sending video to {url} (mode: {mode})")
+            network_start = time.time()
+            response = requests.post(url, headers=headers, files=files, data=data, timeout=timeout)
+            network_time = time.time() - network_start
+
+            response.raise_for_status()
+
+            result = response.json()
+            upload_time = time.time() - upload_start
+
+            if self.enable_profiling:
+                self.profiling_stats['upload_times'].append(file_read_time)
+                self.profiling_stats['network_times'].append(network_time)
+                self.profiling_stats['processing_times'].append(result.get('processing_time', 0))
+
+            self.logger.info(f"Classification result: {result.get('top_class', 'unknown')}")
+            return result, upload_time, file_read_time, network_time
 
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Failed to send video to service: {e}")
-            return None
+            return None, 0, file_read_time, network_time
         except Exception as e:
             self.logger.error(f"Unexpected error sending video: {e}")
-            return None
+            return None, 0, file_read_time, network_time
 
-    def cleanup_temp_file(self, file_path: str):
-        """Clean up temporary video file"""
+    def cleanup_temp_file(self, file_source: Union[str, BytesIO]) -> float:
+        """Clean up temporary video file/buffer and return cleanup time"""
+        cleanup_start = time.time()
         try:
-            os.unlink(file_path)
-            self.logger.debug(f"Cleaned up temp file: {file_path}")
+            if isinstance(file_source, BytesIO):
+                file_source.close()
+            else:
+                os.unlink(file_source)
+
+            cleanup_time = time.time() - cleanup_start
+
+            if self.enable_profiling:
+                self.profiling_stats['cleanup_times'].append(cleanup_time)
+
+            self.logger.debug(f"Cleaned up temp file/buffer")
+            return cleanup_time
         except Exception as e:
-            self.logger.warning(f"Failed to clean up temp file {file_path}: {e}")
+            self.logger.warning(f"Failed to clean up temp file: {e}")
+            return time.time() - cleanup_start
 
     def run(self):
         """Main monitoring loop"""
@@ -260,30 +381,47 @@ class WebcamMonitor:
 
         try:
             while self.running:
-                capture_start = time.time()
+                cycle_start = time.time()
 
                 try:
                     # Capture video
-                    video_path = self.capture_video(duration)
+                    video_path, capture_time = self.capture_video(duration)
 
                     # Send to service
-                    result = self.send_to_service(video_path)
-
-                    if result:
-                        self.logger.info(
-                            f"Processed video - Top class: {result.get('top_class')}, "
-                            f"Confidence: {result.get('top_k_classes', [{}])[0].get('confidence', 0):.3f}, "
-                            f"Processing time: {result.get('processing_time', 0):.2f}s"
-                        )
+                    result, upload_time, file_read_time, network_time = self.send_to_service(video_path)
 
                     # Clean up
-                    self.cleanup_temp_file(video_path)
+                    cleanup_time = self.cleanup_temp_file(video_path)
+
+                    # Calculate total cycle time
+                    cycle_time = time.time() - cycle_start
+
+                    if self.enable_profiling:
+                        self.profiling_stats['total_times'].append(cycle_time)
+
+                    if result:
+                        processing_time = result.get('processing_time', 0)
+
+                        # Log with profiling details if enabled
+                        if self.enable_profiling:
+                            self.logger.info(
+                                f"Processed video - Top: {result.get('top_class')} ({result.get('top_k_classes', [{}])[0].get('confidence', 0):.1%}) | "
+                                f"Capture: {capture_time:.3f}s | Read: {file_read_time:.3f}s | "
+                                f"Network: {network_time:.3f}s | GPU: {processing_time:.3f}s | "
+                                f"Cleanup: {cleanup_time:.3f}s | Total: {cycle_time:.3f}s"
+                            )
+                        else:
+                            self.logger.info(
+                                f"Processed video - Top class: {result.get('top_class')}, "
+                                f"Confidence: {result.get('top_k_classes', [{}])[0].get('confidence', 0):.3f}, "
+                                f"Processing time: {processing_time:.2f}s"
+                            )
 
                 except Exception as e:
                     self.logger.error(f"Error in capture cycle: {e}")
 
                 # Wait for next capture (accounting for processing time)
-                capture_duration = time.time() - capture_start
+                capture_duration = time.time() - cycle_start
                 sleep_duration = max(0, sleep_time - capture_duration)
 
                 if sleep_duration > 0:
@@ -294,6 +432,46 @@ class WebcamMonitor:
         finally:
             self.shutdown()
 
+    def _print_profiling_summary(self):
+        """Print profiling statistics summary"""
+        if not self.enable_profiling or not self.profiling_stats['total_times']:
+            return
+
+        from statistics import mean, median
+
+        self.logger.info("=" * 70)
+        self.logger.info("PERFORMANCE PROFILING SUMMARY")
+        self.logger.info("=" * 70)
+
+        total_cycles = len(self.profiling_stats['total_times'])
+        self.logger.info(f"Total cycles: {total_cycles}")
+        self.logger.info("")
+
+        # Calculate averages
+        avg_capture = mean(self.profiling_stats['capture_times']) if self.profiling_stats['capture_times'] else 0
+        avg_upload = mean(self.profiling_stats['upload_times']) if self.profiling_stats['upload_times'] else 0
+        avg_network = mean(self.profiling_stats['network_times']) if self.profiling_stats['network_times'] else 0
+        avg_processing = mean(self.profiling_stats['processing_times']) if self.profiling_stats['processing_times'] else 0
+        avg_cleanup = mean(self.profiling_stats['cleanup_times']) if self.profiling_stats['cleanup_times'] else 0
+        avg_total = mean(self.profiling_stats['total_times'])
+
+        self.logger.info("Average Times:")
+        self.logger.info(f"  Capture (frames + encode): {avg_capture:.3f}s ({avg_capture/avg_total*100:.1f}%)")
+        self.logger.info(f"  File Read:                 {avg_upload:.3f}s ({avg_upload/avg_total*100:.1f}%)")
+        self.logger.info(f"  Network (upload + download): {avg_network:.3f}s ({avg_network/avg_total*100:.1f}%)")
+        self.logger.info(f"  GPU Processing:            {avg_processing:.3f}s ({avg_processing/avg_total*100:.1f}%)")
+        self.logger.info(f"  File Cleanup:              {avg_cleanup:.3f}s ({avg_cleanup/avg_total*100:.1f}%)")
+        self.logger.info(f"  Total Cycle Time:          {avg_total:.3f}s")
+        self.logger.info("")
+
+        # Median times
+        med_total = median(self.profiling_stats['total_times'])
+        self.logger.info(f"Median cycle time: {med_total:.3f}s")
+        self.logger.info(f"Min cycle time: {min(self.profiling_stats['total_times']):.3f}s")
+        self.logger.info(f"Max cycle time: {max(self.profiling_stats['total_times']):.3f}s")
+
+        self.logger.info("=" * 70)
+
     def shutdown(self):
         """Clean shutdown"""
         self.logger.info("Shutting down webcam monitor...")
@@ -303,6 +481,10 @@ class WebcamMonitor:
             self.camera.release()
 
         cv2.destroyAllWindows()
+
+        # Print profiling summary if enabled
+        self._print_profiling_summary()
+
         self.logger.info("Webcam monitor shut down complete")
 
 

@@ -14,7 +14,7 @@ camera:
   # Camera index - will auto-detect Logitech Brio
   # Set to specific index if auto-detection fails
   # Currently detected: 0=C270 HD WEBCAM (Logitech), 1=FaceTime HD Camera
-  index: 1
+  index: 0
   # Video capture settings
   fps: 8
   width: 256
@@ -29,6 +29,9 @@ capture:
   format: "mp4"
   # Temporary file prefix
   temp_prefix: "webcam_capture"
+  # Number of frames to send for classification (default: 16)
+  # Lower values = faster but potentially less accurate
+  frames_per_clip: 16
 
 logging:
   # Log file path
@@ -37,3 +40,13 @@ logging:
   level: "INFO"
   # Log format
   format: "%(asctime)s - %(levelname)s - %(message)s"
+
+profiling:
+  # Enable detailed performance profiling
+  enabled: true
+  # Show timing breakdown in each log line
+  show_breakdown: true
+
+optimizations:
+  # Use in-memory buffer instead of temp files (faster, uses more RAM)
+  use_memory_buffer: false
