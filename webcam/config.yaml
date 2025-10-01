@@ -2,7 +2,7 @@
 
 service:
   # Service mode: "local" or "cloud"
-  mode: "local"
+  mode: "cloud"
   # Local service URL (used when mode: "local")
   local_url: "http://localhost:8080"
   # Cloud Run service URL (used when mode: "cloud")
@@ -53,3 +53,6 @@ optimizations:
   # Use raw frames mode (bypasses video encoding/decoding - fastest!)
   # Requires /classify-frames endpoint support on server
   use_raw_frames: true
+  # Use parallel processing (capture and inference in separate threads)
+  # Achieves near-continuous processing by overlapping operations
+  use_parallel_processing: false

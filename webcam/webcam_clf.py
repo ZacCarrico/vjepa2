@@ -15,6 +15,8 @@ import signal
 import sys
 import subprocess
 import numpy as np
+import threading
+from queue import Queue, Empty
 from io import BytesIO
 from datetime import datetime
 from typing import Optional, Dict, Any, Union
@@ -42,6 +44,13 @@ class WebcamMonitor:
         # Performance optimizations
         self.use_memory_buffer = self.config.get('optimizations', {}).get('use_memory_buffer', False)
         self.use_raw_frames = self.config.get('optimizations', {}).get('use_raw_frames', False)
+        self.use_parallel_processing = self.config.get('optimizations', {}).get('use_parallel_processing', False)
+
+        # Threading components for parallel processing
+        self.capture_queue = Queue(maxsize=2) if self.use_parallel_processing else None
+        self.result_queue = Queue(maxsize=2) if self.use_parallel_processing else None
+        self.capture_thread = None
+        self.inference_thread = None
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -411,6 +420,41 @@ class WebcamMonitor:
             self.logger.warning(f"Failed to clean up temp file: {e}")
             return time.time() - cleanup_start
 
+    def _capture_worker(self, duration: float):
+        """Worker thread for continuous video capture"""
+        while self.running:
+            try:
+                video_source, capture_time = self.capture_video(duration)
+                self.capture_queue.put((video_source, capture_time, time.time()))
+            except Exception as e:
+                self.logger.error(f"Error in capture worker: {e}")
+                if self.running:
+                    time.sleep(0.1)
+
+    def _inference_worker(self):
+        """Worker thread for processing captured videos"""
+        while self.running:
+            try:
+                # Get captured video from queue with timeout
+                video_source, capture_time, capture_end_time = self.capture_queue.get(timeout=1.0)
+
+                # Send to service
+                result, upload_time, file_read_time, network_time = self.send_to_service(video_source)
+
+                # Clean up
+                cleanup_time = self.cleanup_temp_file(video_source)
+
+                # Calculate total time
+                total_time = time.time() - (capture_end_time - capture_time)
+
+                # Put result in queue
+                self.result_queue.put((result, capture_time, file_read_time, network_time, cleanup_time, total_time))
+
+            except Empty:
+                continue
+            except Exception as e:
+                self.logger.error(f"Error in inference worker: {e}")
+
     def run(self):
         """Main monitoring loop"""
         self.logger.info("Starting webcam monitor...")
@@ -427,55 +471,96 @@ class WebcamMonitor:
         # Calculate sleep time between captures (duration - overlap)
         sleep_time = duration - overlap
 
-        self.logger.info(f"Monitor started: {duration}s videos, {overlap}s overlap, {sleep_time}s between captures")
+        mode_str = "parallel" if self.use_parallel_processing else "sequential"
+        self.logger.info(f"Monitor started ({mode_str} mode): {duration}s videos, {overlap}s overlap, {sleep_time}s between captures")
 
         try:
-            while self.running:
-                cycle_start = time.time()
+            if self.use_parallel_processing:
+                # Start worker threads
+                self.capture_thread = threading.Thread(target=self._capture_worker, args=(duration,), daemon=True)
+                self.inference_thread = threading.Thread(target=self._inference_worker, daemon=True)
 
-                try:
-                    # Capture video
-                    video_path, capture_time = self.capture_video(duration)
+                self.capture_thread.start()
+                self.inference_thread.start()
 
-                    # Send to service
-                    result, upload_time, file_read_time, network_time = self.send_to_service(video_path)
+                # Main loop: just process results from inference thread
+                while self.running:
+                    try:
+                        result, capture_time, file_read_time, network_time, cleanup_time, total_time = self.result_queue.get(timeout=1.0)
 
-                    # Clean up
-                    cleanup_time = self.cleanup_temp_file(video_path)
-
-                    # Calculate total cycle time
-                    cycle_time = time.time() - cycle_start
-
-                    if self.enable_profiling:
-                        self.profiling_stats['total_times'].append(cycle_time)
-
-                    if result:
-                        processing_time = result.get('processing_time', 0)
-
-                        # Log with profiling details if enabled
                         if self.enable_profiling:
-                            self.logger.info(
-                                f"Processed video - Top: {result.get('top_class')} ({result.get('top_k_classes', [{}])[0].get('confidence', 0):.1%}) | "
-                                f"Capture: {capture_time:.3f}s | Read: {file_read_time:.3f}s | "
-                                f"Network: {network_time:.3f}s | GPU: {processing_time:.3f}s | "
-                                f"Cleanup: {cleanup_time:.3f}s | Total: {cycle_time:.3f}s"
-                            )
-                        else:
-                            self.logger.info(
-                                f"Processed video - Top class: {result.get('top_class')}, "
-                                f"Confidence: {result.get('top_k_classes', [{}])[0].get('confidence', 0):.3f}, "
-                                f"Processing time: {processing_time:.2f}s"
-                            )
+                            self.profiling_stats['total_times'].append(total_time)
 
-                except Exception as e:
-                    self.logger.error(f"Error in capture cycle: {e}")
+                        if result:
+                            processing_time = result.get('processing_time', 0)
 
-                # Wait for next capture (accounting for processing time)
-                capture_duration = time.time() - cycle_start
-                sleep_duration = max(0, sleep_time - capture_duration)
+                            if self.enable_profiling:
+                                self.logger.info(
+                                    f"Processed video - Top: {result.get('top_class')} ({result.get('top_k_classes', [{}])[0].get('confidence', 0):.1%}) | "
+                                    f"Capture: {capture_time:.3f}s | Read: {file_read_time:.3f}s | "
+                                    f"Network: {network_time:.3f}s | GPU: {processing_time:.3f}s | "
+                                    f"Cleanup: {cleanup_time:.3f}s | Total: {total_time:.3f}s"
+                                )
+                            else:
+                                self.logger.info(
+                                    f"Processed video - Top class: {result.get('top_class')}, "
+                                    f"Confidence: {result.get('top_k_classes', [{}])[0].get('confidence', 0):.3f}, "
+                                    f"Processing time: {processing_time:.2f}s"
+                                )
 
-                if sleep_duration > 0:
-                    time.sleep(sleep_duration)
+                    except Empty:
+                        continue
+                    except Exception as e:
+                        self.logger.error(f"Error processing result: {e}")
+
+            else:
+                # Sequential mode (original)
+                while self.running:
+                    cycle_start = time.time()
+
+                    try:
+                        # Capture video
+                        video_path, capture_time = self.capture_video(duration)
+
+                        # Send to service
+                        result, upload_time, file_read_time, network_time = self.send_to_service(video_path)
+
+                        # Clean up
+                        cleanup_time = self.cleanup_temp_file(video_path)
+
+                        # Calculate total cycle time
+                        cycle_time = time.time() - cycle_start
+
+                        if self.enable_profiling:
+                            self.profiling_stats['total_times'].append(cycle_time)
+
+                        if result:
+                            processing_time = result.get('processing_time', 0)
+
+                            # Log with profiling details if enabled
+                            if self.enable_profiling:
+                                self.logger.info(
+                                    f"Processed video - Top: {result.get('top_class')} ({result.get('top_k_classes', [{}])[0].get('confidence', 0):.1%}) | "
+                                    f"Capture: {capture_time:.3f}s | Read: {file_read_time:.3f}s | "
+                                    f"Network: {network_time:.3f}s | GPU: {processing_time:.3f}s | "
+                                    f"Cleanup: {cleanup_time:.3f}s | Total: {cycle_time:.3f}s"
+                                )
+                            else:
+                                self.logger.info(
+                                    f"Processed video - Top class: {result.get('top_class')}, "
+                                    f"Confidence: {result.get('top_k_classes', [{}])[0].get('confidence', 0):.3f}, "
+                                    f"Processing time: {processing_time:.2f}s"
+                                )
+
+                    except Exception as e:
+                        self.logger.error(f"Error in capture cycle: {e}")
+
+                    # Wait for next capture (accounting for processing time)
+                    capture_duration = time.time() - cycle_start
+                    sleep_duration = max(0, sleep_time - capture_duration)
+
+                    if sleep_duration > 0:
+                        time.sleep(sleep_duration)
 
         except KeyboardInterrupt:
             self.logger.info("Interrupted by user")
@@ -526,6 +611,13 @@ class WebcamMonitor:
         """Clean shutdown"""
         self.logger.info("Shutting down webcam monitor...")
         self.running = False
+
+        # Wait for worker threads to finish
+        if self.use_parallel_processing:
+            if self.capture_thread and self.capture_thread.is_alive():
+                self.capture_thread.join(timeout=2.0)
+            if self.inference_thread and self.inference_thread.is_alive():
+                self.inference_thread.join(timeout=2.0)
 
         if self.camera:
             self.camera.release()
