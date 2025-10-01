@@ -13,6 +13,7 @@ import yaml
 import requests
 import signal
 import sys
+import subprocess
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -23,6 +24,7 @@ class WebcamMonitor:
         self.setup_logging()
         self.camera = None
         self.running = False
+        self.auth_token = None
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -53,6 +55,20 @@ class WebcamMonitor:
         """Handle shutdown signals gracefully"""
         self.logger.info(f"Received signal {signum}, shutting down gracefully...")
         self.running = False
+
+    def _get_auth_token(self) -> str:
+        """Get authentication token for Cloud Run service"""
+        try:
+            result = subprocess.run(
+                ["gcloud", "auth", "print-identity-token"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to get auth token: {e.stderr}")
+            raise
 
     def find_logitech_brio(self) -> Optional[int]:
         """Find Logitech Brio camera index"""
@@ -177,16 +193,32 @@ class WebcamMonitor:
     def send_to_service(self, video_path: str) -> Optional[Dict[str, Any]]:
         """Send video to vjepa2 service for classification"""
         service_config = self.config.get('service', {})
-        url = f"{service_config['url']}{service_config['endpoint']}"
+        mode = service_config.get('mode', 'local')
+
+        # Select URL based on mode
+        if mode == 'cloud':
+            base_url = service_config.get('cloud_url')
+        else:
+            base_url = service_config.get('local_url', 'http://localhost:8080')
+
+        url = f"{base_url}{service_config['endpoint']}"
         timeout = service_config.get('timeout', 30)
 
         try:
+            # Only use authentication for Cloud Run
+            headers = {}
+            if mode == 'cloud':
+                if self.auth_token is None:
+                    self.auth_token = self._get_auth_token()
+                    self.logger.info("Obtained authentication token")
+                headers = {"Authorization": f"Bearer {self.auth_token}"}
+
             with open(video_path, 'rb') as f:
                 files = {'file': (os.path.basename(video_path), f, 'video/mp4')}
                 data = {'frames_per_clip': 16}
 
-                self.logger.debug(f"Sending video to {url}")
-                response = requests.post(url, files=files, data=data, timeout=timeout)
+                self.logger.debug(f"Sending video to {url} (mode: {mode})")
+                response = requests.post(url, headers=headers, files=files, data=data, timeout=timeout)
                 response.raise_for_status()
 
                 result = response.json()

@@ -1,7 +1,12 @@
 # Webcam Monitor Configuration
 
 service:
-  url: "http://localhost:8080"
+  # Service mode: "local" or "cloud"
+  mode: "cloud"
+  # Local service URL (used when mode: "local")
+  local_url: "http://localhost:8080"
+  # Cloud Run service URL (used when mode: "cloud")
+  cloud_url: "https://vjepa2-classifier-267313437201.us-central1.run.app"
   endpoint: "/classify-upload"
   timeout: 30
 
