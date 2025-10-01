@@ -55,4 +55,4 @@ optimizations:
   use_raw_frames: true
   # Use parallel processing (capture and inference in separate threads)
   # Achieves near-continuous processing by overlapping operations
-  use_parallel_processing: false
+  use_parallel_processing: true
