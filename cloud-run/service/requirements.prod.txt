@@ -4,9 +4,11 @@ uvicorn==0.32.0
 python-multipart==0.0.12
 python-dotenv==1.1.1
 
-# ML/AI dependencies
+# ML/AI dependencies - CUDA 12.4 enabled for GPU support
+--index-url https://download.pytorch.org/whl/cu124
 torch==2.6.0
 torchvision==0.21.0
+--index-url https://pypi.org/simple
 transformers @ git+https://github.com/huggingface/transformers.git@6dfd561d9cd722dfc09f702355518c6d09b9b4e3
 accelerate==1.9.0
 safetensors==0.5.3

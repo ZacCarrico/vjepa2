@@ -99,6 +99,9 @@ class VideoClassifier:
             # Load fine-tuned weights
             self.model.load_state_dict(checkpoint['model_state_dict'])
 
+            # Move model to device
+            self.model = self.model.to(self.device)
+
             logger.info(f"Loaded fine-tuned weights from {fine_tuned_model_path}")
             logger.info(f"Model trained for {checkpoint.get('epoch', 'unknown')} epochs")
             logger.info(f"Best validation accuracy: {checkpoint.get('validation_accuracy', 'unknown')}")
@@ -130,10 +133,7 @@ class VideoClassifier:
                 logger.error(f"Failed to load V-JEPA2 model: {e}")
                 raise ImportError(f"V-JEPA2 model not available: {e}")
 
-        # Move to device and set to eval mode
-        if self.device == "cpu":
-            self.model = self.model.to(self.device)
-
+        # Set to eval mode
         self.model.eval()
         logger.info("V-JEPA2 model loaded and set to eval mode")
 
