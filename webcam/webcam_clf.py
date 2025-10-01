@@ -19,7 +19,7 @@ import threading
 from queue import Queue, Empty
 from io import BytesIO
 from datetime import datetime
-from typing import Optional, Dict, Any, Union
+from typing import Optional, Dict, Any, Union, List
 
 
 class WebcamMonitor:
@@ -81,6 +81,57 @@ class WebcamMonitor:
         """Handle shutdown signals gracefully"""
         self.logger.info(f"Received signal {signum}, shutting down gracefully...")
         self.running = False
+
+    def _format_classification_table(self, result: Dict[str, Any],
+                                     capture_time: float,
+                                     network_time: float,
+                                     processing_time: float,
+                                     total_time: float) -> str:
+        """Format classification results as a table with highlighted max confidence"""
+        top_k_classes = result.get('top_k_classes', [])
+
+        if not top_k_classes:
+            return "No classification results"
+
+        # Sort alphabetically by class name
+        sorted_classes = sorted(top_k_classes, key=lambda x: x.get('class', ''))
+
+        # Find max confidence
+        max_confidence = max(cls.get('confidence', 0) for cls in sorted_classes)
+
+        # Build table
+        lines = []
+        lines.append("┌─────────────────────────────────────┬────────────┐")
+        lines.append("│ Class                               │ Confidence │")
+        lines.append("├─────────────────────────────────────┼────────────┤")
+
+        for cls in sorted_classes:
+            class_name = cls.get('class', 'unknown')
+            confidence = cls.get('confidence', 0)
+
+            # Highlight max confidence with star
+            marker = "★" if confidence == max_confidence else " "
+
+            # Format with padding - ensure consistent width
+            class_str = f"{marker} {class_name}"
+            # Truncate or pad to exactly 35 characters
+            if len(class_str) > 35:
+                class_display = class_str[:35]
+            else:
+                class_display = class_str.ljust(35)
+
+            confidence_display = f"{confidence:.1%}".rjust(9)
+
+            lines.append(f"│ {class_display} │ {confidence_display}  │")
+
+        lines.append("└─────────────────────────────────────┴────────────┘")
+        lines.append("")
+
+        # Add timing information
+        lines.append(f"Timings: Capture: {capture_time:.3f}s | Network: {network_time:.3f}s | "
+                    f"GPU: {processing_time:.3f}s | Total: {total_time:.3f}s")
+
+        return "\n".join(lines)
 
     def _get_auth_token(self) -> str:
         """Get authentication token for Cloud Run service"""
@@ -387,7 +438,6 @@ class WebcamMonitor:
                 self.profiling_stats['network_times'].append(network_time)
                 self.profiling_stats['processing_times'].append(result.get('processing_time', 0))
 
-            self.logger.info(f"Classification result: {result.get('top_class', 'unknown')}")
             return result, upload_time, file_read_time, network_time
 
         except requests.exceptions.RequestException as e:
@@ -494,19 +544,12 @@ class WebcamMonitor:
                         if result:
                             processing_time = result.get('processing_time', 0)
 
-                            if self.enable_profiling:
-                                self.logger.info(
-                                    f"Processed video - Top: {result.get('top_class')} ({result.get('top_k_classes', [{}])[0].get('confidence', 0):.1%}) | "
-                                    f"Capture: {capture_time:.3f}s | Read: {file_read_time:.3f}s | "
-                                    f"Network: {network_time:.3f}s | GPU: {processing_time:.3f}s | "
-                                    f"Cleanup: {cleanup_time:.3f}s | Total: {total_time:.3f}s"
-                                )
-                            else:
-                                self.logger.info(
-                                    f"Processed video - Top class: {result.get('top_class')}, "
-                                    f"Confidence: {result.get('top_k_classes', [{}])[0].get('confidence', 0):.3f}, "
-                                    f"Processing time: {processing_time:.2f}s"
-                                )
+                            # Clear screen and print table
+                            print("\033[2J\033[H")  # Clear screen and move cursor to top
+                            table = self._format_classification_table(
+                                result, capture_time, network_time, processing_time, total_time
+                            )
+                            print(table)
 
                     except Empty:
                         continue
@@ -537,20 +580,12 @@ class WebcamMonitor:
                         if result:
                             processing_time = result.get('processing_time', 0)
 
-                            # Log with profiling details if enabled
-                            if self.enable_profiling:
-                                self.logger.info(
-                                    f"Processed video - Top: {result.get('top_class')} ({result.get('top_k_classes', [{}])[0].get('confidence', 0):.1%}) | "
-                                    f"Capture: {capture_time:.3f}s | Read: {file_read_time:.3f}s | "
-                                    f"Network: {network_time:.3f}s | GPU: {processing_time:.3f}s | "
-                                    f"Cleanup: {cleanup_time:.3f}s | Total: {cycle_time:.3f}s"
-                                )
-                            else:
-                                self.logger.info(
-                                    f"Processed video - Top class: {result.get('top_class')}, "
-                                    f"Confidence: {result.get('top_k_classes', [{}])[0].get('confidence', 0):.3f}, "
-                                    f"Processing time: {processing_time:.2f}s"
-                                )
+                            # Clear screen and print table
+                            print("\033[2J\033[H")  # Clear screen and move cursor to top
+                            table = self._format_classification_table(
+                                result, capture_time, network_time, processing_time, cycle_time
+                            )
+                            print(table)
 
                     except Exception as e:
                         self.logger.error(f"Error in capture cycle: {e}")
