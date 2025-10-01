@@ -2,7 +2,7 @@
 
 service:
   # Service mode: "local" or "cloud"
-  mode: "cloud"
+  mode: "local"
   # Local service URL (used when mode: "local")
   local_url: "http://localhost:8080"
   # Cloud Run service URL (used when mode: "cloud")
@@ -14,7 +14,7 @@ camera:
   # Camera index - will auto-detect Logitech Brio
   # Set to specific index if auto-detection fails
   # Currently detected: 0=C270 HD WEBCAM (Logitech), 1=FaceTime HD Camera
-  index: 0
+  index: 1
   # Video capture settings
   fps: 8
   width: 256
@@ -49,7 +49,7 @@ profiling:
 
 optimizations:
   # Use in-memory buffer instead of temp files (faster, uses more RAM)
-  use_memory_buffer: true
+  use_memory_buffer: false
   # Use raw frames mode (bypasses video encoding/decoding - fastest!)
   # Requires /classify-frames endpoint support on server
-  use_raw_frames: false
+  use_raw_frames: true
