@@ -21,17 +21,17 @@ camera:
   height: 256
 
 capture:
-  # Video duration in seconds
-  duration: 2
+  # Video duration in seconds (reduced from 2s to 1s for faster processing)
+  duration: 1
   # Overlap in seconds (time between video starts)
   overlap: 0
   # Output format
   format: "mp4"
   # Temporary file prefix
   temp_prefix: "webcam_capture"
-  # Number of frames to send for classification (default: 16)
+  # Number of frames to send for classification (reduced from 16 to 8)
   # Lower values = faster but potentially less accurate
-  frames_per_clip: 16
+  frames_per_clip: 8
 
 logging:
   # Log file path
@@ -49,4 +49,4 @@ profiling:
 
 optimizations:
   # Use in-memory buffer instead of temp files (faster, uses more RAM)
-  use_memory_buffer: false
+  use_memory_buffer: true
