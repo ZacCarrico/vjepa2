@@ -196,7 +196,6 @@ def plot_scaling_analysis(metrics_100, metrics_200):
 
     # 2. Training Time per Video
     time_per_video = [
-        metrics_50["total_training_time"] / metrics_50["num_train_videos"],
         metrics_100["total_training_time"] / metrics_100["num_train_videos"],
         metrics_200["total_training_time"] / metrics_200["num_train_videos"],
     ]
@@ -215,7 +214,6 @@ def plot_scaling_analysis(metrics_100, metrics_200):
 
     # 3. Best Validation Accuracy
     best_val_accs = [
-        metrics_50["best_val_acc"],
         metrics_100["best_val_acc"],
         metrics_200["best_val_acc"],
     ]
@@ -233,7 +231,6 @@ def plot_scaling_analysis(metrics_100, metrics_200):
 
     # 4. Final Training Loss
     final_losses = [
-        metrics_50["train_loss"][-1],
         metrics_100["train_loss"][-1],
         metrics_200["train_loss"][-1],
     ]
@@ -254,68 +251,56 @@ def plot_scaling_analysis(metrics_100, metrics_200):
     plt.close()
 
 
-def generate_video_count_summary(metrics_50, metrics_100, metrics_200):
+def generate_video_count_summary(metrics_100, metrics_200):
     """Generate comprehensive summary report for video count comparison"""
 
     print("=" * 80)
     print("LORA ACTION DETECTION VIDEO COUNT COMPARISON REPORT")
-    print("Impact of Training Data Size on LoRA Fine-tuning Performance")
+    print("Impact of Training Data Size on LoRA Fine-tuning Performance (LR=2e-4)")
     print("=" * 80)
 
     print("\n📊 PERFORMANCE SUMMARY:")
-    print(f"50 Videos/Class  (140 train) - Test: {metrics_50['final_test_acc']:.4f} | Val: {metrics_50['best_val_acc']:.4f}")
     print(f"100 Videos/Class (280 train) - Test: {metrics_100['final_test_acc']:.4f} | Val: {metrics_100['best_val_acc']:.4f}")
     print(f"200 Videos/Class (560 train) - Test: {metrics_200['final_test_acc']:.4f} | Val: {metrics_200['best_val_acc']:.4f}")
 
     # Calculate improvements
-    improvement_100_50 = (metrics_100["final_test_acc"] - metrics_50["final_test_acc"])
     improvement_200_100 = (metrics_200["final_test_acc"] - metrics_100["final_test_acc"])
-    improvement_200_50 = (metrics_200["final_test_acc"] - metrics_50["final_test_acc"])
 
     print(f"\nPerformance Improvements:")
-    print(f"100 vs 50 videos:   {improvement_100_50:+.4f} ({improvement_100_50/metrics_50['final_test_acc']*100:+.1f}%)")
     print(f"200 vs 100 videos:  {improvement_200_100:+.4f} ({improvement_200_100/metrics_100['final_test_acc']*100:+.1f}%)")
-    print(f"200 vs 50 videos:   {improvement_200_50:+.4f} ({improvement_200_50/metrics_50['final_test_acc']*100:+.1f}%)")
 
     print("\n⏱️ TRAINING TIME ANALYSIS:")
-    print(f"50 Videos/Class:  {metrics_50['total_training_time']:.0f}s ({metrics_50['total_training_time']/60:.1f}m)")
     print(f"100 Videos/Class: {metrics_100['total_training_time']:.0f}s ({metrics_100['total_training_time']/60:.1f}m)")
     print(f"200 Videos/Class: {metrics_200['total_training_time']:.0f}s ({metrics_200['total_training_time']/60:.1f}m)")
 
     print(f"\nTime per Training Video:")
-    print(f"50 Videos/Class:  {metrics_50['total_training_time']/metrics_50['num_train_videos']:.2f}s per video")
     print(f"100 Videos/Class: {metrics_100['total_training_time']/metrics_100['num_train_videos']:.2f}s per video")
     print(f"200 Videos/Class: {metrics_200['total_training_time']/metrics_200['num_train_videos']:.2f}s per video")
 
     print("\n🎯 TRAINING EFFICIENCY:")
-    eff_50 = metrics_50['final_test_acc'] / (metrics_50['total_training_time']/60)
     eff_100 = metrics_100['final_test_acc'] / (metrics_100['total_training_time']/60)
     eff_200 = metrics_200['final_test_acc'] / (metrics_200['total_training_time']/60)
 
-    print(f"50 Videos/Class:  {eff_50:.4f} accuracy per minute")
     print(f"100 Videos/Class: {eff_100:.4f} accuracy per minute")
     print(f"200 Videos/Class: {eff_200:.4f} accuracy per minute")
 
     print("\n💾 PARAMETER EFFICIENCY:")
-    print(f"Total Parameters:     {metrics_50['total_params']:,}")
-    print(f"Trainable Parameters: {metrics_50['trainable_params']:,}")
-    print(f"Trainable Percentage: {metrics_50['trainable_params']/metrics_50['total_params']*100:.2f}%")
+    print(f"Total Parameters:     {metrics_100['total_params']:,}")
+    print(f"Trainable Parameters: {metrics_100['trainable_params']:,}")
+    print(f"Trainable Percentage: {metrics_100['trainable_params']/metrics_100['total_params']*100:.2f}%")
     print("(Same for all experiments - LoRA adapters only)")
 
     print("\n🔍 KEY INSIGHTS:")
     print("• LoRA trains only 0.13% of parameters while achieving strong performance")
-    print(f"• Doubling from 50→100 videos: {improvement_100_50/metrics_50['final_test_acc']*100:.1f}% improvement")
     print(f"• Doubling from 100→200 videos: {improvement_200_100/metrics_100['final_test_acc']*100:.1f}% improvement")
     print("• Training time scales linearly with video count")
-    print("• Diminishing returns: bigger gains from 50→100 than 100→200")
 
     print("\n📈 SCALING PATTERN:")
-    if improvement_100_50 > improvement_200_100 * 1.2:
-        print("✅ Diminishing returns observed - initial data increase more beneficial")
-        print("   Suggests the model benefits significantly from basic diversity")
-        print("   but additional data provides smaller incremental gains")
+    if improvement_200_100 > 0:
+        print("✅ More data continues to improve performance")
+        print("   Additional training data provides meaningful accuracy gains")
     else:
-        print("⚖️  Relatively consistent returns - more data continues to help")
+        print("⚖️  Performance plateauing - may need different approach for further gains")
 
     # Determine optimal point
     if metrics_200['final_test_acc'] > 0.85:
@@ -342,10 +327,10 @@ def main():
     """Main analysis function"""
 
     print("Loading LoRA action detection metrics for different video counts...")
-    metrics_50, metrics_100, metrics_200 = load_lora_metrics()
+    metrics_100, metrics_200 = load_lora_metrics()
 
     print("Creating comparison tables...")
-    comparison_df = create_video_comparison_table(metrics_50, metrics_100, metrics_200)
+    comparison_df = create_video_comparison_table(metrics_100, metrics_200)
 
     print("\n" + "=" * 80)
     print("DETAILED VIDEO COUNT COMPARISON TABLE")
@@ -353,13 +338,13 @@ def main():
     print(comparison_df.to_string(index=False))
 
     print("\nGenerating training curve plots...")
-    plot_training_curves(metrics_50, metrics_100, metrics_200)
+    plot_training_curves(metrics_100, metrics_200)
 
     print("Generating scaling analysis plots...")
-    plot_scaling_analysis(metrics_50, metrics_100, metrics_200)
+    plot_scaling_analysis(metrics_100, metrics_200)
 
     print("Generating comprehensive summary report...")
-    generate_video_count_summary(metrics_50, metrics_100, metrics_200)
+    generate_video_count_summary(metrics_100, metrics_200)
 
     # Save comparison table
     comparison_df.to_csv("action_lora_video_comparison_table.csv", index=False)

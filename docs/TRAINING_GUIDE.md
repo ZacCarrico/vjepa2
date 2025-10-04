@@ -467,6 +467,26 @@ eval_transforms = v2.Compose([
    - Adding LoRA to full pooler training may introduce optimization challenges
    - Not recommended based on experimental results
 
+### LoRA Scaling Analysis
+
+The following plots show how LoRA performance scales with training data size (100 vs 200 videos per class):
+
+![LoRA Training Curves](../action_lora_video_comparison.png)
+
+**Training Curve Analysis**:
+- Test accuracy improves from 81.67% to 84.17% when doubling training data (+3.1%)
+- Training time scales linearly: 17.5 min → 38.2 min
+- Training loss decreases more effectively with more data (0.4427 → 0.3857)
+- Validation accuracy plateaus at 86.67% for both configurations
+
+![LoRA Scaling Analysis](../action_lora_scaling_analysis.png)
+
+**Scaling Insights**:
+- Test accuracy shows positive scaling trend with more training data
+- Training time per video remains consistent (~3.7-4.1 seconds)
+- Best validation accuracy plateaus, suggesting model capacity limits
+- Final training loss continues to decrease, indicating potential for more training data
+
 ### Scaling Behavior
 
 Performance trends across different dataset sizes (50, 100, 200 videos per class):
