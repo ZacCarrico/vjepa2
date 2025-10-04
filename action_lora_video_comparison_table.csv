@@ -1,14 +1,14 @@
-Metric,100 Videos/Class,200 Videos/Class
-Videos per Class,100,200
-Training Videos,280,560
-Validation Videos,60,120
-Test Videos,60,120
-Total Parameters,"375,803,268","375,803,268"
-Trainable Parameters,"495,620","495,620"
-Trainable %,0.13%,0.13%
-Final Test Accuracy,0.8167,0.8417
-Best Validation Accuracy,0.8667,0.8667
-Final Training Loss,0.4427,0.3857
-Total Training Time,1048s (17.5m),2294s (38.2m)
-Training Time per Video,3.74s,4.10s
-Accuracy Gain per Minute,0.0468,0.0220
+Metric,100 Videos/Class,200 Videos/Class,400 Videos/Class
+Videos per Class,100,200,400
+Training Videos,280,560,"1,120"
+Validation Videos,60,120,240
+Test Videos,60,120,240
+Total Parameters,"375,803,268","375,803,268","375,803,268"
+Trainable Parameters,"495,620","495,620","495,620"
+Trainable %,0.13%,0.13%,0.13%
+Final Test Accuracy,0.8167,0.8417,0.8875
+Best Validation Accuracy,0.8667,0.8667,0.8667
+Final Training Loss,0.4427,0.3857,0.3264
+Total Training Time,1048s (17.5m),2294s (38.2m),4818s (80.3m)
+Training Time per Video,3.74s,4.10s,4.30s
+Accuracy Gain per Minute,0.0468,0.0220,0.0111

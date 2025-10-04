@@ -469,33 +469,36 @@ eval_transforms = v2.Compose([
 
 ### LoRA Scaling Analysis
 
-The following plots show how LoRA performance scales with training data size (100 vs 200 videos per class):
+The following plots show how LoRA performance scales with training data size (100, 200, and 400 videos per class):
 
 ![LoRA Training Curves](../action_lora_video_comparison.png)
 
 **Training Curve Analysis**:
-- Test accuracy improves from 81.67% to 84.17% when doubling training data (+3.1%)
-- Training time scales linearly: 17.5 min → 38.2 min
-- Training loss decreases more effectively with more data (0.4427 → 0.3857)
-- Validation accuracy plateaus at 86.67% for both configurations
+- Test accuracy improves significantly with more training data: 81.67% → 84.17% → 88.75%
+- Training time scales linearly: 17.5 min → 38.2 min → 80.3 min
+- Training loss decreases consistently: 0.4427 → 0.3857 → 0.3264
+- Validation accuracy plateaus at 86.67% across all configurations
 
 ![LoRA Scaling Analysis](../action_lora_scaling_analysis.png)
 
 **Scaling Insights**:
-- Test accuracy shows positive scaling trend with more training data
-- Training time per video remains consistent (~3.7-4.1 seconds)
-- Best validation accuracy plateaus, suggesting model capacity limits
-- Final training loss continues to decrease, indicating potential for more training data
+- Test accuracy shows strong positive scaling with training data
+- Improvement rates: +3.1% (100→200 videos), +5.4% (200→400 videos)
+- Training time per video remains consistent (~3.7-4.3 seconds)
+- Best validation accuracy plateaus at 86.67%, but test accuracy continues improving
+- Final training loss continues to decrease, suggesting benefit from even more training data
+- **Recommendation**: Use 400 videos/class for production (88.8% accuracy), or 200 videos/class if training time is critical (84.2% accuracy)
 
 ### Scaling Behavior
 
-Performance trends across different dataset sizes (50, 100, 200 videos per class):
+Performance trends across different dataset sizes:
 
 | Dataset Size | Head-only | LoRA | Pooler+Head |
 |--------------|-----------|------|-------------|
 | 50 videos | 76.67% | 76.67% | 13.33% |
 | 100 videos | 83.33% | 81.67% | 76.67% |
 | 200 videos | 78.33% | 84.17% | 88.33% |
+| 400 videos | — | **88.75%** | — |
 
 **Observations**:
 - Pooler+head struggles with small datasets (overfitting)
