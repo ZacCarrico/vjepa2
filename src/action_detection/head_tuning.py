@@ -206,7 +206,7 @@ def create_data_loaders(train_ds, val_ds, test_ds, processor, batch_size=1, num_
 
 def parse_arguments():
     """Parse command line arguments"""
-    parser = argparse.ArgumentParser(description='V-JEPA 2 Action Detection Fine-tuning')
+    parser = argparse.ArgumentParser(description='V-JEPA 2 Head-Only Fine-tuning')
     parser.add_argument(
         '--num_videos',
         type=int,
@@ -217,7 +217,10 @@ def parse_arguments():
 
 
 def main():
-    print("Starting V-JEPA 2 Action Detection Pooler+Head Fine-tuning")
+    print("Starting V-JEPA 2 Action Detection Head-Only Fine-tuning")
+    print("=" * 50)
+    print("This script trains ONLY the classifier head (~4K params)")
+    print("Freezes: backbone (vjepa2) + pooler")
     print("=" * 50)
 
     # Create timestamp for output files
@@ -255,7 +258,6 @@ def main():
     test_ds = ActionDetectionDataset(test_videos, label2id)
 
     # Setup model and processor
-    model_name = "facebook/vjepa2-vitl-fpc16-256-ssv2"
     models_dir = pathlib.Path("models")
     models_dir.mkdir(exist_ok=True)
 
@@ -274,9 +276,9 @@ def main():
         ).to(device)
     else:
         print(f"Downloading and caching model to: {local_model_path}")
-        processor = VJEPA2VideoProcessor.from_pretrained(model_name)
+        processor = VJEPA2VideoProcessor.from_pretrained(config.model_name)
         model = VJEPA2ForVideoClassification.from_pretrained(
-            model_name,
+            config.model_name,
             torch_dtype=torch.float32,
             label2id=label2id,
             id2label=id2label,
@@ -288,7 +290,7 @@ def main():
         model.save_pretrained(local_model_path)
 
     # Print model statistics
-    print_parameter_stats(model, "V-JEPA 2 Action Detection Model")
+    print_parameter_stats(model, "V-JEPA 2 Model (Before Freezing)")
 
     # Create DataLoaders
     frames_per_clip = model.config.frames_per_clip
@@ -297,11 +299,14 @@ def main():
         train_ds, val_ds, test_ds, processor, config.batch_size, config.num_workers, frames_per_clip
     )
 
-    # Freeze backbone and only train classification head (pooler + classifier)
+    # Freeze backbone AND pooler, only train classifier head
     for param in model.vjepa2.parameters():
         param.requires_grad = False
 
-    print_parameter_stats(model, "V-JEPA 2 Action Detection Model (After Freezing)")
+    for param in model.pooler.parameters():
+        param.requires_grad = False
+
+    print_parameter_stats(model, "V-JEPA 2 Model (After Freezing - Head Only)")
 
     # Setup training
     trainable = [p for p in model.parameters() if p.requires_grad]
@@ -309,13 +314,13 @@ def main():
 
     # Setup tensorboard
     output_suffix = f"{args.num_videos}videos_{frames_per_clip}frames_{timestamp}"
-    tensorboard_dir = f"runs/ntu_pooler_head_{output_suffix}"
+    tensorboard_dir = f"runs/ntu_head_only_{output_suffix}"
     writer = setup_tensorboard(tensorboard_dir)
 
     # Store metrics for comparison
     training_metrics = {
         "timestamp": timestamp,
-        "approach": "pooler_and_head",
+        "approach": "head_only",
         "num_videos_per_class": args.num_videos,
         "num_train_videos": len(train_videos),
         "num_val_videos": len(val_videos),
@@ -380,7 +385,7 @@ def main():
             # Save model to disk
             models_dir = pathlib.Path("models")
             models_dir.mkdir(exist_ok=True)
-            model_save_path = models_dir / f"best_action_detection_model_epoch_{epoch}.pth"
+            model_save_path = models_dir / f"best_head_only_model_epoch_{epoch}.pth"
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': best_model_state,
@@ -420,7 +425,7 @@ def main():
     training_metrics["total_training_time"] = total_duration
 
     # Save metrics with timestamp
-    metrics_filename = f"pooler_head_metrics_{output_suffix}.json"
+    metrics_filename = f"head_only_metrics_{output_suffix}.json"
     with open(metrics_filename, "w") as f:
         json.dump(training_metrics, f, indent=2)
 
