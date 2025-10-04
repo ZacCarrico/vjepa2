@@ -1,4 +1,5 @@
 UCF101_subset/
+CLAUDE.md
 models/
 ntu_rgb/
 webcam/webcam_clf.log

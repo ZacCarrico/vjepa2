@@ -36,8 +36,11 @@ vjepa2/
 │       │   ├── utils.py                          # Shared utilities (seed, device, parameter counting)
 │       │   ├── data.py                           # Dataset classes, data loading, transforms
 │       │   └── training.py                       # Evaluation functions, TensorBoard setup
-│       ├── vjepa2_finetuning.py                  # Final layer only fine-tuning
-│       └── lora_vjepa2_finetuning.py             # LoRA + final layer fine-tuning
+│       ├── vid_classification/                   # Video classification experiments
+│       │   ├── fine_tuning.py                    # Final layer only fine-tuning
+│       │   └── lora_fine_tuning.py               # LoRA + final layer fine-tuning
+│       └── action_detection/                     # Action detection experiments
+│           └── fine_tuning.py                    # Action detection fine-tuning
 │
 ├── 🔧 ANALYSIS SCRIPTS
 │   └── scripts/
@@ -91,10 +94,10 @@ pip install -r requirements.txt
 ### 2. **Run Training Experiments**
 ```bash
 # Run final layer only fine-tuning
-python src/vjepa2_finetuning.py
+python src/vid_classification/fine_tuning.py
 
 # Run LoRA + final layer fine-tuning
-python src/lora_vjepa2_finetuning.py
+python src/vid_classification/lora_fine_tuning.py
 
 # Generate comparison analysis
 python scripts/compare_results.py

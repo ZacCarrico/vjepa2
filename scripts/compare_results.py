@@ -6,8 +6,8 @@ Comparison Analysis: Final Layer Only vs LoRA + Final Layer Fine-tuning
 ========================================================================
 
 This script compares training results between:
-1. Final layer only fine-tuning (vjepa2_finetuning.py) - Backbone frozen, only classification head trained
-2. LoRA + Final layer fine-tuning (adapter-tuning.py) - Backbone frozen, LoRA adapters + classification head trained
+1. Final layer only fine-tuning (vid_classification/fine_tuning.py) - Backbone frozen, only classification head trained
+2. LoRA + Final layer fine-tuning (vid_classification/lora_fine_tuning.py) - Backbone frozen, LoRA adapters + classification head trained
 
 Both approaches freeze the V-JEPA 2 backbone. The key difference:
 - Approach 1: Only trains the final classification layer

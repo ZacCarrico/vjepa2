@@ -1,9 +1,12 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import argparse
+import json
 import pathlib
 import random
 import time
+from datetime import datetime
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -14,8 +17,10 @@ from torchcodec.samplers import clips_at_random_indices
 from torchvision.transforms import v2
 from transformers import VJEPA2ForVideoClassification, VJEPA2VideoProcessor
 
-from common.training import evaluate, setup_tensorboard
-from common.utils import get_device, set_seed, print_parameter_stats
+from src.action_detection.config import DEFAULT_CONFIG
+from src.common.experiment_tracker import ExperimentTracker
+from src.common.training import evaluate, setup_tensorboard
+from src.common.utils import get_device, set_seed, print_parameter_stats, count_parameters
 
 
 class ActionDetectionDataset(Dataset):
@@ -46,19 +51,22 @@ class ActionDetectionDataset(Dataset):
         return decoder, self.label2id[label]
 
 
-def setup_ntu_action_dataset() -> Tuple[List, List, List, Dict, Dict]:
+def setup_ntu_action_dataset(num_videos_per_class: int = 100) -> Tuple[List, List, List, Dict, Dict]:
     """
     Setup NTU RGB dataset for action detection.
+
+    Args:
+        num_videos_per_class: Number of videos to use per class
 
     Returns:
         Tuple of (train_paths, val_paths, test_paths, label2id, id2label)
     """
     ntu_rgb_path = pathlib.Path("ntu_rgb")
 
-    # Find target action videos (limit to 100 each)
-    sitting_videos = list(ntu_rgb_path.glob("*A008_rgb.avi"))[:100]
-    standing_videos = list(ntu_rgb_path.glob("*A009_rgb.avi"))[:100]
-    waving_videos = list(ntu_rgb_path.glob("*A023_rgb.avi"))[:100]
+    # Find target action videos (limit to num_videos_per_class each)
+    sitting_videos = list(ntu_rgb_path.glob("*A008_rgb.avi"))[:num_videos_per_class]
+    standing_videos = list(ntu_rgb_path.glob("*A009_rgb.avi"))[:num_videos_per_class]
+    waving_videos = list(ntu_rgb_path.glob("*A023_rgb.avi"))[:num_videos_per_class]
 
     # Find negative samples (other actions)
     all_videos = list(ntu_rgb_path.glob("*.avi"))
@@ -73,9 +81,9 @@ def setup_ntu_action_dataset() -> Tuple[List, List, List, Dict, Dict]:
     # Balance dataset by sampling negatives
     total_positives = len(sitting_videos) + len(standing_videos) + len(waving_videos)
 
-    # Sample 100 negatives to match other classes
+    # Sample negatives to match other classes
     random.seed(42)
-    sampled_negatives = random.sample(negative_videos, min(100, len(negative_videos)))
+    sampled_negatives = random.sample(negative_videos, min(num_videos_per_class, len(negative_videos)))
 
     # Combine all videos
     all_action_videos = sitting_videos + standing_videos + waving_videos + sampled_negatives
@@ -196,19 +204,50 @@ def create_data_loaders(train_ds, val_ds, test_ds, processor, batch_size=1, num_
     return train_loader, val_loader, test_loader
 
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='V-JEPA 2 Action Detection Fine-tuning')
+    parser.add_argument(
+        '--num_videos',
+        type=int,
+        default=100,
+        help='Number of videos per class to use (default: 100)'
+    )
+    return parser.parse_args()
+
+
 def main():
-    print("Starting V-JEPA 2 Action Detection Fine-tuning")
+    print("Starting V-JEPA 2 Action Detection Pooler+Head Fine-tuning")
     print("=" * 50)
 
+    # Create timestamp for output files
+    timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
+    print(f"Training session timestamp: {timestamp}")
+
+    # Parse arguments
+    args = parse_arguments()
+    print(f"Configuration:")
+    print(f"  Videos per class: {args.num_videos}")
+
+    # Load shared config
+    config = DEFAULT_CONFIG
+    print(f"\nUsing shared configuration:")
+    print(f"  Epochs: {config.num_epochs}")
+    print(f"  Learning rate: {config.learning_rate}")
+    print(f"  Batch size: {config.batch_size}")
+    print(f"  Weight decay: {config.weight_decay}")
+
     # Set seed for reproducibility
-    set_seed(42)
+    set_seed(config.seed)
 
     # Auto-detect best available device
     device = get_device()
     print(f"Using device: {device}")
 
     # Setup dataset
-    train_videos, val_videos, test_videos, label2id, id2label = setup_ntu_action_dataset()
+    train_videos, val_videos, test_videos, label2id, id2label = setup_ntu_action_dataset(
+        num_videos_per_class=args.num_videos
+    )
 
     # Create datasets
     train_ds = ActionDetectionDataset(train_videos, label2id)
@@ -252,15 +291,13 @@ def main():
     print_parameter_stats(model, "V-JEPA 2 Action Detection Model")
 
     # Create DataLoaders
-    batch_size = 1
-    num_workers = 0
     frames_per_clip = model.config.frames_per_clip
 
     train_loader, val_loader, test_loader = create_data_loaders(
-        train_ds, val_ds, test_ds, processor, batch_size, num_workers, frames_per_clip
+        train_ds, val_ds, test_ds, processor, config.batch_size, config.num_workers, frames_per_clip
     )
 
-    # Freeze backbone and only train classification head
+    # Freeze backbone and only train classification head (pooler + classifier)
     for param in model.vjepa2.parameters():
         param.requires_grad = False
 
@@ -268,14 +305,29 @@ def main():
 
     # Setup training
     trainable = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.Adam(trainable, lr=1e-4)
+    optimizer = torch.optim.AdamW(trainable, lr=config.learning_rate, weight_decay=config.weight_decay)
 
     # Setup tensorboard
-    writer = setup_tensorboard("runs/ntu_action_detection")
+    output_suffix = f"{args.num_videos}videos_{frames_per_clip}frames_{timestamp}"
+    tensorboard_dir = f"runs/ntu_pooler_head_{output_suffix}"
+    writer = setup_tensorboard(tensorboard_dir)
 
-    # Training parameters
-    num_epochs = 1
-    accumulation_steps = 4
+    # Store metrics for comparison
+    training_metrics = {
+        "timestamp": timestamp,
+        "approach": "pooler_and_head",
+        "num_videos_per_class": args.num_videos,
+        "num_train_videos": len(train_videos),
+        "num_val_videos": len(val_videos),
+        "num_test_videos": len(test_videos),
+        "frames_per_clip": frames_per_clip,
+        "learning_rate": config.learning_rate,
+        "weight_decay": config.weight_decay,
+        "batch_size": config.batch_size,
+        "accumulation_steps": config.accumulation_steps,
+        "trainable_params": count_parameters(model)[1],
+        "total_params": count_parameters(model)[0],
+    }
 
     # Best model tracking
     best_val_acc = 0.0
@@ -284,9 +336,9 @@ def main():
     # Start timing
     total_start_time = time.time()
     print(f"Starting training at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Training for {num_epochs} epochs with {len(train_loader)} steps per epoch")
+    print(f"Training for {config.num_epochs} epochs with {len(train_loader)} steps per epoch")
 
-    for epoch in range(1, num_epochs + 1):
+    for epoch in range(1, config.num_epochs + 1):
         epoch_start_time = time.time()
         model.train()
         running_loss = 0.0
@@ -299,14 +351,14 @@ def main():
             inputs = processor(vids, return_tensors="pt").to(model.device)
             labels = labels.to(model.device)
             outputs = model(**inputs, labels=labels)
-            loss = outputs.loss / accumulation_steps
+            loss = outputs.loss / config.accumulation_steps
             loss.backward()
             running_loss += loss.item()
 
-            if step % accumulation_steps == 0:
+            if step % config.accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
-                if step % (accumulation_steps * 10) == 0:  # Log every 10 accumulation steps
+                if step % (config.accumulation_steps * 10) == 0:  # Log every 10 accumulation steps
                     print(f"Epoch {epoch} Step {step}: Accumulated Loss = {running_loss:.4f}")
                     writer.add_scalar("Train/Loss", running_loss, (epoch-1) * len(train_loader) + step)
                 running_loss = 0.0
@@ -359,8 +411,26 @@ def main():
     print(f"Training finished at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # Log final results
-    writer.add_scalar("Test/Final_Accuracy", test_acc, num_epochs)
+    writer.add_scalar("Test/Final_Accuracy", test_acc, config.num_epochs)
     writer.close()
+
+    # Save metrics
+    training_metrics["final_test_acc"] = test_acc
+    training_metrics["best_val_acc"] = best_val_acc
+    training_metrics["total_training_time"] = total_duration
+
+    # Save metrics with timestamp
+    metrics_filename = f"pooler_head_metrics_{output_suffix}.json"
+    with open(metrics_filename, "w") as f:
+        json.dump(training_metrics, f, indent=2)
+
+    print(f"\nTraining metrics saved to: {metrics_filename}")
+    print(f"Tensorboard logs saved to: {tensorboard_dir}")
+
+    # Log to shared experiment tracker
+    tracker = ExperimentTracker()
+    training_metrics["num_epochs"] = config.num_epochs
+    tracker.log_experiment(training_metrics)
 
     # Print label mapping for reference
     print(f"\nLabel Mapping:")
