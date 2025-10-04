@@ -1,0 +1,18 @@
+{
+  "timestamp": "251003-195014",
+  "approach": "pooler_and_head",
+  "num_videos_per_class": 50,
+  "num_train_videos": 140,
+  "num_val_videos": 30,
+  "num_test_videos": 30,
+  "frames_per_clip": 16,
+  "learning_rate": 0.001,
+  "weight_decay": 0.01,
+  "batch_size": 1,
+  "accumulation_steps": 4,
+  "trainable_params": 49340420,
+  "total_params": 375311748,
+  "final_test_acc": 0.6,
+  "best_val_acc": 0.8333333333333334,
+  "total_training_time": 545.0760989189148
+}

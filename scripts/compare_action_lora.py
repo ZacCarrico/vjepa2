@@ -26,23 +26,21 @@ plt.style.use("default")
 
 
 def load_lora_metrics():
-    """Load training metrics from the three action detection LoRA experiments"""
+    """Load training metrics from valid action detection LoRA experiments (LR=2e-4)"""
 
-    # Find the most recent metrics files for each video count
-    metrics_50 = json.load(open("lora_action_metrics_50videos_16frames_251003-083426.json"))
-    metrics_100 = json.load(open("lora_action_metrics_100videos_16frames_251003-091641.json"))
-    metrics_200 = json.load(open("lora_action_metrics_200videos_16frames_251003-094705.json"))
+    # Load valid metrics files with consistent configuration (LR=2e-4)
+    metrics_100 = json.load(open("metrics/action_detection/lora_action_metrics_100videos_16frames_251003-221650.json"))
+    metrics_200 = json.load(open("metrics/action_detection/lora_action_metrics_200videos_16frames_251004-062932.json"))
 
     # Add method labels for identification
-    metrics_50["method"] = "50 Videos/Class"
     metrics_100["method"] = "100 Videos/Class"
     metrics_200["method"] = "200 Videos/Class"
 
-    print("✅ Loaded all three LoRA action detection training metrics files")
-    return metrics_50, metrics_100, metrics_200
+    print("✅ Loaded LoRA action detection training metrics files (LR=2e-4)")
+    return metrics_100, metrics_200
 
 
-def create_video_comparison_table(metrics_50, metrics_100, metrics_200):
+def create_video_comparison_table(metrics_100, metrics_200):
     """Create detailed comparison table for different video counts"""
 
     data = {
@@ -60,21 +58,6 @@ def create_video_comparison_table(metrics_50, metrics_100, metrics_200):
             "Total Training Time",
             "Training Time per Video",
             "Accuracy Gain per Minute",
-        ],
-        "50 Videos/Class": [
-            "50",
-            f"{metrics_50['num_train_videos']:,}",
-            f"{metrics_50['num_val_videos']:,}",
-            f"{metrics_50['num_test_videos']:,}",
-            f"{metrics_50['total_params']:,}",
-            f"{metrics_50['trainable_params']:,}",
-            f"{metrics_50['trainable_params']/metrics_50['total_params']*100:.2f}%",
-            f"{metrics_50['final_test_acc']:.4f}",
-            f"{metrics_50['best_val_acc']:.4f}",
-            f"{metrics_50['train_loss'][-1]:.4f}",
-            f"{metrics_50['total_training_time']:.0f}s ({metrics_50['total_training_time']/60:.1f}m)",
-            f"{metrics_50['total_training_time']/metrics_50['num_train_videos']:.2f}s",
-            f"{metrics_50['final_test_acc']/(metrics_50['total_training_time']/60):.4f}",
         ],
         "100 Videos/Class": [
             "100",
@@ -112,19 +95,18 @@ def create_video_comparison_table(metrics_50, metrics_100, metrics_200):
     return df
 
 
-def plot_training_curves(metrics_50, metrics_100, metrics_200):
+def plot_training_curves(metrics_100, metrics_200):
     """Create training curve comparison plots"""
 
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 10))
-    fig.suptitle("LoRA Action Detection: Impact of Training Video Count", fontsize=16)
+    fig.suptitle("LoRA Action Detection: Impact of Training Video Count (LR=2e-4)", fontsize=16)
 
     epochs = list(range(1, 6))  # 5 epochs for all
-    colors = ['#ff7f0e', '#2ca02c', '#1f77b4']  # Orange, Green, Blue
-    video_counts = [50, 100, 200]
+    colors = ['#2ca02c', '#1f77b4']  # Green, Blue
+    video_counts = [100, 200]
 
     # 1. Test Accuracy Comparison (Top Left)
     test_accuracies = [
-        metrics_50["final_test_acc"],
         metrics_100["final_test_acc"],
         metrics_200["final_test_acc"],
     ]
@@ -145,7 +127,6 @@ def plot_training_curves(metrics_50, metrics_100, metrics_200):
 
     # 2. Training Time Comparison (Top Right)
     train_times = [
-        metrics_50["total_training_time"] / 60,
         metrics_100["total_training_time"] / 60,
         metrics_200["total_training_time"] / 60,
     ]
@@ -164,9 +145,8 @@ def plot_training_curves(metrics_50, metrics_100, metrics_200):
     ax2.grid(True, alpha=0.3, axis='y')
 
     # 3. Training Loss Comparison (Bottom Left)
-    ax3.plot(epochs, metrics_50["train_loss"], 'o-', label="50 Videos/Class", linewidth=2, markersize=6, color=colors[0])
-    ax3.plot(epochs, metrics_100["train_loss"], 's-', label="100 Videos/Class", linewidth=2, markersize=6, color=colors[1])
-    ax3.plot(epochs, metrics_200["train_loss"], '^-', label="200 Videos/Class", linewidth=2, markersize=6, color=colors[2])
+    ax3.plot(epochs, metrics_100["train_loss"], 's-', label="100 Videos/Class", linewidth=2, markersize=6, color=colors[0])
+    ax3.plot(epochs, metrics_200["train_loss"], '^-', label="200 Videos/Class", linewidth=2, markersize=6, color=colors[1])
     ax3.set_xlabel("Epoch")
     ax3.set_ylabel("Training Loss")
     ax3.set_title("Training Loss Comparison")
@@ -174,9 +154,8 @@ def plot_training_curves(metrics_50, metrics_100, metrics_200):
     ax3.grid(True, alpha=0.3)
 
     # 4. Validation Accuracy Comparison (Bottom Right)
-    ax4.plot(epochs, metrics_50["val_acc"], 'o-', label="50 Videos/Class", linewidth=2, markersize=6, color=colors[0])
-    ax4.plot(epochs, metrics_100["val_acc"], 's-', label="100 Videos/Class", linewidth=2, markersize=6, color=colors[1])
-    ax4.plot(epochs, metrics_200["val_acc"], '^-', label="200 Videos/Class", linewidth=2, markersize=6, color=colors[2])
+    ax4.plot(epochs, metrics_100["val_acc"], 's-', label="100 Videos/Class", linewidth=2, markersize=6, color=colors[0])
+    ax4.plot(epochs, metrics_200["val_acc"], '^-', label="200 Videos/Class", linewidth=2, markersize=6, color=colors[1])
     ax4.set_xlabel("Epoch")
     ax4.set_ylabel("Validation Accuracy")
     ax4.set_title("Validation Accuracy Comparison")
@@ -188,18 +167,17 @@ def plot_training_curves(metrics_50, metrics_100, metrics_200):
     plt.close()
 
 
-def plot_scaling_analysis(metrics_50, metrics_100, metrics_200):
+def plot_scaling_analysis(metrics_100, metrics_200):
     """Create scaling analysis plots"""
 
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle("LoRA Action Detection: Training Data Scaling Analysis", fontsize=16)
+    fig.suptitle("LoRA Action Detection: Training Data Scaling Analysis (LR=2e-4)", fontsize=16)
 
-    video_counts = [50, 100, 200]
-    colors = ['#ff7f0e', '#2ca02c', '#1f77b4']
+    video_counts = [100, 200]
+    colors = ['#2ca02c', '#1f77b4']
 
     # 1. Test Accuracy vs Training Videos (with trend line)
     test_accs = [
-        metrics_50["final_test_acc"],
         metrics_100["final_test_acc"],
         metrics_200["final_test_acc"],
     ]

@@ -1,0 +1,42 @@
+{
+  "timestamp": "251003-204412",
+  "approach": "lora",
+  "num_videos_per_class": 50,
+  "num_train_videos": 140,
+  "num_val_videos": 30,
+  "num_test_videos": 30,
+  "frames_per_clip": 16,
+  "lora_rank": 16,
+  "lora_alpha": 32.0,
+  "lora_dropout": 0.1,
+  "learning_rate": 0.001,
+  "weight_decay": 0.01,
+  "batch_size": 1,
+  "accumulation_steps": 4,
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "train_loss": [
+    0.944842017222462,
+    0.5708557005871886,
+    0.3669760487786594,
+    0.3860468599447943,
+    0.4042183600066892
+  ],
+  "val_acc": [
+    0.7333333333333333,
+    0.8,
+    0.7333333333333333,
+    0.7333333333333333,
+    0.7333333333333333
+  ],
+  "trainable_params": 495620,
+  "total_params": 375803268,
+  "final_test_acc": 0.7666666666666667,
+  "best_val_acc": 0.8,
+  "total_training_time": 788.2622730731964
+}
