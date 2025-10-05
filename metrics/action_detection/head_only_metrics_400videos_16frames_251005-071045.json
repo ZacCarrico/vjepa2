@@ -1,0 +1,18 @@
+{
+  "timestamp": "251005-071045",
+  "approach": "head_only",
+  "num_videos_per_class": 400,
+  "num_train_videos": 1120,
+  "num_val_videos": 240,
+  "num_test_videos": 240,
+  "frames_per_clip": 16,
+  "learning_rate": 0.0002,
+  "weight_decay": 0.01,
+  "batch_size": 1,
+  "accumulation_steps": 4,
+  "trainable_params": 4100,
+  "total_params": 375311748,
+  "final_test_acc": 0.8166666666666667,
+  "best_val_acc": 0.7958333333333333,
+  "total_training_time": 4373.330053806305
+}
