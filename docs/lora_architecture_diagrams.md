@@ -7,7 +7,7 @@ This document shows the architecture changes for V-JEPA 2 LoRA fine-tuning on a 
 graph LR
     A[Video frames] --> B[V-JEPA 2 Encoder]
     B --> C[Video Embeddings]
-    C --> D[Global Average Pooling]
+    C --> D[VJEPA2AttentivePooler]
     D --> E[Classification Head]
     E --> F[Class Logits]
     F --> G[Cross-Entropy Loss]
@@ -26,7 +26,7 @@ graph LR
 graph LR
     A[Input Video] --> B[V-JEPA 2 Encoder]
     B --> C[Video Embeddings]
-    C --> D[Global Average Pooling]
+    C --> D[VJEPA2AttentivePooler]
     D --> E[Classification Head]
     E --> F[Class Logits]
     F --> G[ArgMax -> Predicted Class]
