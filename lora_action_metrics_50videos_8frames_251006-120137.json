@@ -1,0 +1,71 @@
+{
+  "timestamp": "251006-120137",
+  "approach": "lora",
+  "num_videos_per_class": 50,
+  "num_train_videos": 140,
+  "num_val_videos": 30,
+  "num_test_videos": 30,
+  "frames_per_clip": 8,
+  "num_epochs": 5,
+  "batch_size": 1,
+  "accumulation_steps": 4,
+  "learning_rate": 0.0005,
+  "weight_decay": 0.01,
+  "num_workers": 0,
+  "seed": 42,
+  "model_name": "facebook/vjepa2-vitl-fpc16-256-ssv2",
+  "lora_rank": 16,
+  "lora_alpha": 32.0,
+  "lora_dropout": 0.1,
+  "epochs": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "train_loss": [
+    1.1591950927461896,
+    0.9590478334043707,
+    0.8082264929244827,
+    0.7650249201305477,
+    0.7063824674746554
+  ],
+  "val_acc": [
+    0.5,
+    0.5666666666666667,
+    0.4666666666666667,
+    0.7333333333333333,
+    0.7666666666666667
+  ],
+  "trainable_params": 495620,
+  "total_params": 375803268,
+  "final_test_acc": 0.6333333333333333,
+  "final_train_acc": 0.7142857142857143,
+  "best_val_acc": 0.7666666666666667,
+  "best_epoch": 5,
+  "inference_time_ms": 156.27401669820148,
+  "per_class_metrics": {
+    "sitting_down": {
+      "precision": 0.5714285714285714,
+      "recall": 0.8,
+      "f1": 0.6666666666666666
+    },
+    "standing_up": {
+      "precision": 0.7142857142857143,
+      "recall": 0.7142857142857143,
+      "f1": 0.7142857142857143
+    },
+    "waving": {
+      "precision": 0.7,
+      "recall": 0.7,
+      "f1": 0.7
+    },
+    "other": {
+      "precision": 0.5,
+      "recall": 0.375,
+      "f1": 0.42857142857142855
+    }
+  },
+  "total_training_time": 329.0192120075226
+}
