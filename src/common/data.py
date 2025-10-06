@@ -61,7 +61,8 @@ def setup_ucf101_dataset() -> Tuple[List, List, List, pathlib.Path]:
         t.extractall(".", filter="data")
 
     dataset_root_path = pathlib.Path("UCF101_subset")
-    all_video_file_paths = list(dataset_root_path.glob("**/*.avi"))
+    # Sort for deterministic ordering across filesystems
+    all_video_file_paths = sorted(dataset_root_path.glob("**/*.avi"))
 
     # Split data
     train_video_file_paths = []

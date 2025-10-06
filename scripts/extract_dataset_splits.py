@@ -17,63 +17,8 @@ import json
 import pathlib
 import re
 from typing import Dict, List, Tuple
-import random
 
-
-def setup_ntu_action_dataset(num_videos_per_class: int = 100) -> Tuple[List, List, List, Dict, Dict]:
-    """
-    Setup NTU RGB dataset for action detection.
-
-    This is the EXACT same function used in training scripts to ensure
-    we get identical splits.
-
-    Args:
-        num_videos_per_class: Number of videos to use per class
-
-    Returns:
-        Tuple of (train_paths, val_paths, test_paths, label2id, id2label)
-    """
-    ntu_rgb_path = pathlib.Path("ntu_rgb")
-
-    # Find target action videos (limit to num_videos_per_class each)
-    sitting_videos = list(ntu_rgb_path.glob("*A008_rgb.avi"))[:num_videos_per_class]
-    standing_videos = list(ntu_rgb_path.glob("*A009_rgb.avi"))[:num_videos_per_class]
-    waving_videos = list(ntu_rgb_path.glob("*A023_rgb.avi"))[:num_videos_per_class]
-
-    # Find negative samples (other actions)
-    all_videos = list(ntu_rgb_path.glob("*.avi"))
-    target_actions = set(sitting_videos + standing_videos + waving_videos)
-    negative_videos = [v for v in all_videos if v not in target_actions]
-
-    # Balance dataset by sampling negatives
-    random.seed(42)
-    sampled_negatives = random.sample(negative_videos, min(num_videos_per_class, len(negative_videos)))
-
-    # Combine all videos
-    all_action_videos = sitting_videos + standing_videos + waving_videos + sampled_negatives
-
-    # Shuffle and split
-    random.shuffle(all_action_videos)
-
-    # 70/15/15 split
-    total_videos = len(all_action_videos)
-    train_size = int(0.7 * total_videos)
-    val_size = int(0.15 * total_videos)
-
-    train_videos = all_action_videos[:train_size]
-    val_videos = all_action_videos[train_size:train_size + val_size]
-    test_videos = all_action_videos[train_size + val_size:]
-
-    # Create label mappings
-    label2id = {
-        "sitting_down": 0,
-        "standing_up": 1,
-        "waving": 2,
-        "other": 3
-    }
-    id2label = {v: k for k, v in label2id.items()}
-
-    return train_videos, val_videos, test_videos, label2id, id2label
+from src.action_detection.data import setup_ntu_action_dataset
 
 
 def extract_num_videos_from_filename(filename: str) -> int:
