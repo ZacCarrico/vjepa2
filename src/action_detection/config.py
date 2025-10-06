@@ -16,6 +16,7 @@ class TrainingConfig:
 
     # Data configuration
     num_workers: int = 0
+    frames_per_clip: int = 8
 
     # Model configuration
     model_name: str = "facebook/vjepa2-vitl-fpc16-256-ssv2"

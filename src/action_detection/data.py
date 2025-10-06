@@ -185,7 +185,7 @@ def create_data_loaders(
     processor,
     batch_size=1,
     num_workers=0,
-    frames_per_clip=16,
+    frames_per_clip=8,
 ):
     """Create DataLoaders for train, validation, and test sets."""
     train_transforms, eval_transforms = setup_transforms(processor)

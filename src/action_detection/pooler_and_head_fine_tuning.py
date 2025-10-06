@@ -114,12 +114,16 @@ def main():
         processor.save_pretrained(local_model_path)
         model.save_pretrained(local_model_path)
 
+    # Set frames_per_clip from config
+    frames_per_clip = config.frames_per_clip
+    if frames_per_clip != model.config.frames_per_clip:
+        print(f"Overriding frames per clip: {model.config.frames_per_clip} → {frames_per_clip}")
+        model.config.frames_per_clip = frames_per_clip
+
     # Print model statistics
     print_parameter_stats(model, "V-JEPA 2 Action Detection Model")
 
     # Create DataLoaders
-    frames_per_clip = model.config.frames_per_clip
-
     train_loader, val_loader, test_loader = create_data_loaders(
         train_ds, val_ds, test_ds, processor, config.batch_size, config.num_workers, frames_per_clip
     )

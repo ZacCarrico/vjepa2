@@ -270,6 +270,12 @@ def main():
         processor.save_pretrained(local_model_path)
         model.save_pretrained(local_model_path)
 
+    # Set frames_per_clip from config
+    frames_per_clip = config.frames_per_clip
+    if frames_per_clip != model.config.frames_per_clip:
+        print(f"Overriding frames per clip: {model.config.frames_per_clip} → {frames_per_clip}")
+        model.config.frames_per_clip = frames_per_clip
+
     print("\nOriginal model parameter stats:")
     print_parameter_stats(model, "Original V-JEPA 2")
 
@@ -302,7 +308,6 @@ def main():
     print_parameter_stats(model, "Pooler+Head+LoRA Adapted V-JEPA 2")
 
     # Create DataLoaders
-    frames_per_clip = model.config.frames_per_clip
     train_loader, val_loader, test_loader = create_data_loaders(
         train_ds,
         val_ds,

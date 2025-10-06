@@ -310,12 +310,13 @@ def main():
         processor.save_pretrained(local_model_path)
         model.save_pretrained(local_model_path)
 
-    # Override frames_per_clip if specified
-    if args.frames_per_clip:
+    # Set frames_per_clip from config (allow command line override)
+    frames_per_clip = args.frames_per_clip if args.frames_per_clip else config.frames_per_clip
+    if frames_per_clip != model.config.frames_per_clip:
         original_frames = model.config.frames_per_clip
-        model.config.frames_per_clip = args.frames_per_clip
+        model.config.frames_per_clip = frames_per_clip
         print(
-            f"Overriding frames per clip: {original_frames} → {args.frames_per_clip}"
+            f"Overriding frames per clip: {original_frames} → {frames_per_clip}"
         )
 
     print("\nOriginal model parameter stats:")
@@ -345,8 +346,7 @@ def main():
     print(f"\nApplied LoRA to {adapted_count} modules")
     print_parameter_stats(model, "LoRA Adapted V-JEPA 2")
 
-    # Create DataLoaders
-    frames_per_clip = model.config.frames_per_clip
+    # Create DataLoaders using config frames_per_clip
     train_loader, val_loader, test_loader = create_data_loaders(
         train_ds,
         val_ds,
