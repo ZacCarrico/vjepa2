@@ -192,16 +192,16 @@ def parse_arguments():
 
     # LoRA configuration
     parser.add_argument(
-        "--lora_rank", type=int, default=16, help="LoRA rank (default: 16)"
+        "--lora_rank", type=int, default=None, help="LoRA rank (default: use config)"
     )
     parser.add_argument(
-        "--lora_alpha", type=float, default=32.0, help="LoRA alpha (default: 32.0)"
+        "--lora_alpha", type=float, default=None, help="LoRA alpha (default: use config)"
     )
     parser.add_argument(
         "--lora_dropout",
         type=float,
-        default=0.1,
-        help="LoRA dropout rate (default: 0.1)",
+        default=None,
+        help="LoRA dropout rate (default: use config)",
     )
 
     # Training configuration
@@ -212,13 +212,13 @@ def parse_arguments():
         "--batch_size", type=int, default=1, help="Batch size (default: 1)"
     )
     parser.add_argument(
-        "--learning_rate", type=float, default=2e-4, help="Learning rate (default: 2e-4)"
+        "--learning_rate", type=float, default=None, help="Learning rate (default: use config)"
     )
     parser.add_argument(
         "--weight_decay",
         type=float,
-        default=0.01,
-        help="Weight decay (default: 0.01)",
+        default=None,
+        help="Weight decay (default: use config)",
     )
     parser.add_argument(
         "--accumulation_steps",
@@ -243,6 +243,16 @@ def main():
 
     # Load shared config (override argparse defaults)
     config = DEFAULT_CONFIG
+
+    # Override config with command-line arguments if provided
+    if args.learning_rate is not None:
+        config.learning_rate = args.learning_rate
+    if args.lora_rank is not None:
+        config.lora_rank = args.lora_rank
+    if args.lora_alpha is not None:
+        config.lora_alpha = args.lora_alpha
+    if args.lora_dropout is not None:
+        config.lora_dropout = args.lora_dropout
 
     # Create timestamp for output files
     timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
