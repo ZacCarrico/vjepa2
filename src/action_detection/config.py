@@ -22,8 +22,10 @@ class TrainingConfig:
     model_name: str = "facebook/vjepa2-vitl-fpc16-256-ssv2"
 
     # LoRA configuration (only used for LoRA approach)
-    lora_rank: int = 16
-    lora_alpha: float = 32.0
+    # Optimized based on Phase 2 hyperparameter sweep (100 videos/class)
+    # Winner: Rank=64, Alpha=128 achieved 81.67% val, 71.67% test
+    lora_rank: int = 64
+    lora_alpha: float = 128.0
     lora_dropout: float = 0.1
 
     # Random seed
