@@ -59,58 +59,74 @@ graph LR
 
 ## V-JEPA 2 Model with LoRA Adapters
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'12px'}}}%%
 graph LR
-    A[Input Video] --> B[V-JEPA 2 Encoder]
-    B --> C[Attention Layers]
+    A[Input<br/>Video] --> B[V-JEPA 2<br/>Encoder]
+    B --> C[Attention<br/>Layers]
 
-    subgraph "Query Projection"
-        D[AdaptedLinear query_proj]
-        D1[Original query_proj<br/>FROZEN]
-        D2[LoRA query_proj<br/>TRAINABLE]
+    subgraph "Q/K/V Projections"
+        D[AdaptedLinear<br/>query/key/value_proj]
+        D1[Original<br/>query/key/value_proj<br/>FROZEN]
+        D2[LoRA<br/>query/key/value_proj<br/>TRAINABLE]
         D --> D1
         D --> D2
         D1 --> D3[+]
         D2 --> D3
     end
 
-    subgraph "Key Projection"
-        E[AdaptedLinear key_proj]
-        E1[Original key_proj<br/>FROZEN]
-        E2[LoRA key_proj<br/>TRAINABLE]
-        E --> E1
-        E --> E2
-        E1 --> E3[+]
-        E2 --> E3
-    end
-
-    subgraph "Value Projection"
-        F[AdaptedLinear value_proj]
-        F1[Original value_proj<br/>FROZEN]
-        F2[LoRA value_proj<br/>TRAINABLE]
-        F --> F1
-        F --> F2
-        F1 --> F3[+]
-        F2 --> F3
+    subgraph "Output Projection"
+        G[AdaptedLinear<br/>out_proj]
+        G1[Original<br/>out_proj<br/>FROZEN]
+        G2[LoRA<br/>out_proj<br/>TRAINABLE]
+        G --> G1
+        G --> G2
+        G1 --> G3[+]
+        G2 --> G3
     end
 
     C --> D
-    C --> E
-    C --> F
-    D3 --> H[Multi-Head Attention]
-    E3 --> H
-    F3 --> H
-    H --> I[Layer Output]
-    I --> J[More Encoder Layers...]
-    J --> K[Classification Head<br/>TRAINABLE]
-    K --> L[Output Logits]
+    D3 --> H[Multi-Head<br/>Attention]
+    H --> G
+    G3 --> I[Layer<br/>Output]
+    I --> J[More Encoder<br/>Layers...]
+    J --> K[Classification<br/>Head<br/>TRAINABLE]
+    K --> L[Output<br/>Logits]
 
     style D1 fill:#ffcdd2
-    style E1 fill:#ffcdd2
-    style F1 fill:#ffcdd2
+    style G1 fill:#ffcdd2
     style D2 fill:#c8e6c9
-    style E2 fill:#c8e6c9
-    style F2 fill:#c8e6c9
+    style G2 fill:#c8e6c9
     style K fill:#c8e6c9
+```
+
+## LoRA Attention Layer (Simplified for Slides)
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'12px'}}}%%
+graph LR
+    subgraph "Q/K/V Projections"
+        A[Original<br/>FROZEN]
+        B[LoRA<br/>TRAINABLE]
+        A --> C[+]
+        B --> C
+    end
+
+    C --> D[Multi-Head<br/>Attention]
+
+    subgraph "Output Projection"
+        E[Original<br/>FROZEN]
+        F[LoRA<br/>TRAINABLE]
+        E --> G[+]
+        F --> G
+    end
+
+    D --> E
+    D --> F
+    G --> H[...]
+
+    style A fill:#ffcdd2
+    style E fill:#ffcdd2
+    style B fill:#c8e6c9
+    style F fill:#c8e6c9
 ```
 
 ## LoRA Layer Internal Structure
