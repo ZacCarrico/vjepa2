@@ -14,7 +14,7 @@ camera:
   # Camera index - will auto-detect Logitech Brio
   # Set to specific index if auto-detection fails
   # Currently detected: 0=C270 HD WEBCAM (Logitech), 1=FaceTime HD Camera
-  index: 1
+  index: 0
   # Video capture settings
   fps: 8
   width: 256
