@@ -46,6 +46,12 @@ def parse_arguments():
         default=None,
         help='Number of frames per clip (default: use config value)'
     )
+    parser.add_argument(
+        '--learning_rate',
+        type=float,
+        default=None,
+        help='Learning rate (default: use config value)'
+    )
     return parser.parse_args()
 
 
@@ -146,8 +152,9 @@ def main():
     print_parameter_stats(model, "V-JEPA 2 Model (After Freezing - Head Only)")
 
     # Setup training
+    learning_rate = args.learning_rate if args.learning_rate is not None else config.learning_rate
     trainable = [p for p in model.parameters() if p.requires_grad]
-    optimizer = torch.optim.AdamW(trainable, lr=config.learning_rate, weight_decay=config.weight_decay)
+    optimizer = torch.optim.AdamW(trainable, lr=learning_rate, weight_decay=config.weight_decay)
 
     # Setup tensorboard
     output_suffix = f"{args.num_videos}videos_{frames_per_clip}frames_{timestamp}"
@@ -166,7 +173,7 @@ def main():
         "num_epochs": config.num_epochs,
         "batch_size": config.batch_size,
         "accumulation_steps": config.accumulation_steps,
-        "learning_rate": config.learning_rate,
+        "learning_rate": learning_rate,  # Use actual learning_rate used
         "weight_decay": config.weight_decay,
         "num_workers": config.num_workers,
         "seed": config.seed,
