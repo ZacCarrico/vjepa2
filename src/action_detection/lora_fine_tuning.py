@@ -377,13 +377,17 @@ def main():
         "num_val_videos": len(val_videos),
         "num_test_videos": len(test_videos),
         "frames_per_clip": frames_per_clip,
+        "num_epochs": config.num_epochs,
+        "batch_size": config.batch_size,
+        "accumulation_steps": config.accumulation_steps,
+        "learning_rate": config.learning_rate,
+        "weight_decay": config.weight_decay,
+        "num_workers": config.num_workers,
+        "seed": config.seed,
+        "model_name": config.model_name,
         "lora_rank": config.lora_rank,
         "lora_alpha": config.lora_alpha,
         "lora_dropout": config.lora_dropout,
-        "learning_rate": config.learning_rate,
-        "weight_decay": config.weight_decay,
-        "batch_size": config.batch_size,
-        "accumulation_steps": config.accumulation_steps,
         "epochs": [],
         "train_loss": [],
         "val_acc": [],
@@ -526,7 +530,6 @@ def main():
 
     # Log to shared experiment tracker
     tracker = ExperimentTracker()
-    training_metrics["num_epochs"] = config.num_epochs
     tracker.log_experiment(training_metrics)
 
     # Print label mapping for reference
