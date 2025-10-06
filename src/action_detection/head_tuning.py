@@ -24,7 +24,7 @@ from src.action_detection.data import (
     create_data_loaders,
 )
 from src.common.experiment_tracker import ExperimentTracker
-from src.common.training import evaluate, setup_tensorboard
+from src.common.training import evaluate, evaluate_detailed, setup_tensorboard
 from src.common.utils import get_device, set_seed, print_parameter_stats, count_parameters
 
 
@@ -184,6 +184,7 @@ def main():
 
     # Best model tracking
     best_val_acc = 0.0
+    best_epoch = 0
     best_model_state = None
 
     # Start timing
@@ -229,6 +230,7 @@ def main():
         # Save best model based on validation accuracy
         if val_acc > best_val_acc:
             best_val_acc = val_acc
+            best_epoch = epoch
             best_model_state = model.state_dict().copy()
             # Save model to disk
             models_dir = pathlib.Path("models")
@@ -250,26 +252,43 @@ def main():
     else:
         print(f"\nNo best model saved, using final epoch model for test evaluation")
 
-    # Final test evaluation
-    test_acc = evaluate(test_loader, model, processor, model.device)
+    # Final test evaluation with detailed metrics
+    print("\nEvaluating on train and test sets...")
+    train_results = evaluate_detailed(train_loader, model, processor, model.device, id2label)
+    test_results = evaluate_detailed(test_loader, model, processor, model.device, id2label)
     total_end_time = time.time()
     total_duration = total_end_time - total_start_time
 
     print("\n" + "=" * 50)
     print("TRAINING COMPLETED")
     print("=" * 50)
-    print(f"Final Test Accuracy: {test_acc:.4f}")
+    print(f"Final Test Accuracy: {test_results['accuracy']:.4f}")
+    print(f"Final Train Accuracy: {train_results['accuracy']:.4f}")
     print(f"Best Validation Accuracy: {best_val_acc:.4f}")
+    print(f"Best Epoch: {best_epoch}")
+    print(f"Inference Time: {test_results['inference_time_ms']:.2f} ms/video")
     print(f"Total Training Time: {total_duration:.2f} seconds ({total_duration/60:.2f} minutes)")
     print(f"Training finished at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
 
+    # Print per-class metrics
+    print("\nPer-Class Metrics (Test Set):")
+    for class_name, metrics in test_results['per_class_metrics'].items():
+        print(f"  {class_name}:")
+        print(f"    Precision: {metrics['precision']:.4f}")
+        print(f"    Recall: {metrics['recall']:.4f}")
+        print(f"    F1-Score: {metrics['f1']:.4f}")
+
     # Log final results
-    writer.add_scalar("Test/Final_Accuracy", test_acc, config.num_epochs)
+    writer.add_scalar("Test/Final_Accuracy", test_results['accuracy'], config.num_epochs)
     writer.close()
 
     # Save metrics
-    training_metrics["final_test_acc"] = test_acc
+    training_metrics["final_test_acc"] = test_results['accuracy']
+    training_metrics["final_train_acc"] = train_results['accuracy']
     training_metrics["best_val_acc"] = best_val_acc
+    training_metrics["best_epoch"] = best_epoch
+    training_metrics["inference_time_ms"] = test_results['inference_time_ms']
+    training_metrics["per_class_metrics"] = test_results['per_class_metrics']
     training_metrics["total_training_time"] = total_duration
 
     # Save metrics with timestamp
@@ -284,6 +303,13 @@ def main():
     tracker = ExperimentTracker()
     training_metrics["num_epochs"] = config.num_epochs
     tracker.log_experiment(training_metrics)
+
+    # Save confusion matrix
+    tracker.save_confusion_matrix(
+        test_results['confusion_matrix'],
+        id2label,
+        f"head_only_{args.num_videos}videos_{frames_per_clip}frames_{timestamp}"
+    )
 
     # Print label mapping for reference
     print(f"\nLabel Mapping:")
