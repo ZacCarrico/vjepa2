@@ -139,20 +139,28 @@ class VideoClassifier:
 
     def _get_model_path(self) -> str:
         """Get path to fine-tuned model, downloading from GCS if needed and available."""
+        # Use the best LoRA model (88.75% test accuracy, 400 videos/class)
+        model_filename = "best_lora_model_400videos_epoch_4.pth"
+
         # For Cloud Run, use /tmp which is writable
         # For local development, try to use the models directory
         if self.use_gcs:
             # In Cloud Run, use /tmp which is writable by non-root users
-            local_model_path = "/tmp/best_action_detection_model_epoch_1.pth"
+            local_model_path = f"/tmp/{model_filename}"
         else:
             # Check if model exists in current directory (for Docker local testing)
-            current_dir_model = os.path.join(os.path.dirname(__file__), "best_action_detection_model_epoch_1.pth")
+            current_dir_model = os.path.join(os.path.dirname(__file__), model_filename)
             if os.path.exists(current_dir_model):
                 local_model_path = current_dir_model
             else:
                 # For local development, use the project structure
+                # Try the saved model filename first
                 project_root = os.path.join(os.path.dirname(__file__), '..', '..')
-                local_model_path = os.path.join(project_root, "models/best_action_detection_model_epoch_1.pth")
+                saved_model_path = os.path.join(project_root, "models/lora_action_detection_400videos_16frames_251004-140701_epoch_4.pth")
+                if os.path.exists(saved_model_path):
+                    local_model_path = saved_model_path
+                else:
+                    local_model_path = os.path.join(project_root, f"models/{model_filename}")
 
         # If file exists locally, use it
         if os.path.exists(local_model_path):
@@ -163,7 +171,7 @@ class VideoClassifier:
         if self.use_gcs:
             try:
                 logger.info("Model not found in cache, downloading from GCS...")
-                gcs_model_uri = "gs://vjepa2/model-artifacts/best_action_detection_model_epoch_1.pth"
+                gcs_model_uri = f"gs://vjepa2/model-artifacts/{model_filename}"
 
                 # Download from GCS directly to the path (no need to create directory for /tmp)
                 self._download_from_gcs(gcs_model_uri, local_model_path)
