@@ -1,4 +1,5 @@
 UCF101_subset/
+irreproducible_experiments.csv
 CLAUDE.md
 models/
 ntu_rgb/

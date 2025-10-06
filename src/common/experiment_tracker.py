@@ -2,6 +2,7 @@
 
 import csv
 import os
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
@@ -10,10 +11,25 @@ from typing import Dict, Any
 class ExperimentTracker:
     """Tracks experiments to a shared CSV file."""
 
+    @staticmethod
+    def _get_git_hash() -> str:
+        """Get current git commit hash."""
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            return result.stdout.strip()
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return "unknown"
+
     def __init__(self, csv_path: str = "experiments.csv"):
         self.csv_path = Path(csv_path)
         self.fieldnames = [
             "timestamp",
+            "git_hash",
             "approach",
             "num_videos_per_class",
             "num_train_videos",
@@ -50,6 +66,9 @@ class ExperimentTracker:
         Args:
             metrics: Dictionary containing experiment metrics
         """
+        # Add git hash
+        metrics["git_hash"] = self._get_git_hash()
+
         # Calculate derived metrics
         if "trainable_params" in metrics and "total_params" in metrics:
             metrics["trainable_pct"] = (

@@ -40,6 +40,12 @@ def parse_arguments():
         default=100,
         help='Number of videos per class to use (default: 100)'
     )
+    parser.add_argument(
+        '--frames_per_clip',
+        type=int,
+        default=None,
+        help='Number of frames per clip (default: use config value)'
+    )
     return parser.parse_args()
 
 
@@ -116,8 +122,8 @@ def main():
         processor.save_pretrained(local_model_path)
         model.save_pretrained(local_model_path)
 
-    # Set frames_per_clip from config
-    frames_per_clip = config.frames_per_clip
+    # Set frames_per_clip from args or config
+    frames_per_clip = args.frames_per_clip if args.frames_per_clip is not None else config.frames_per_clip
     if frames_per_clip != model.config.frames_per_clip:
         print(f"Overriding frames per clip: {model.config.frames_per_clip} → {frames_per_clip}")
         model.config.frames_per_clip = frames_per_clip
