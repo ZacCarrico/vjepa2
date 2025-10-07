@@ -34,9 +34,9 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 # Plot 1: Average F1-Score vs Training Data
 ax1 = axes[0]
 ax1.plot(videos, [f*100 for f in lora_f1], 'o-', linewidth=2.5, markersize=10,
-         label='LoRA (Rank=64, Alpha=128)', color='#2E86AB')
+         label='LoRA+Classification Layer', color='#2E86AB')
 ax1.plot(videos, [f*100 for f in head_f1], 's-', linewidth=2.5, markersize=10,
-         label='Head-Only', color='#A23B72')
+         label='Classification Layer', color='#A23B72')
 
 ax1.set_xlabel('Videos per Class', fontsize=12, fontweight='bold')
 ax1.set_ylabel('Average F1-Score (%)', fontsize=12, fontweight='bold')
@@ -56,9 +56,9 @@ for i, v in enumerate(videos):
 # Plot 2: Training Time vs Training Data
 ax2 = axes[1]
 ax2.plot(videos, lora_time, 'o-', linewidth=2.5, markersize=10,
-         label='LoRA (Rank=64, Alpha=128)', color='#2E86AB')
+         label='LoRA+Classification Layer', color='#2E86AB')
 ax2.plot(videos, head_time, 's-', linewidth=2.5, markersize=10,
-         label='Head-Only', color='#A23B72')
+         label='Classification Layer', color='#A23B72')
 
 ax2.set_xlabel('Videos per Class', fontsize=12, fontweight='bold')
 ax2.set_ylabel('Training Time (minutes)', fontsize=12, fontweight='bold')
@@ -83,8 +83,8 @@ ax2.annotate('LoRA: Higher cost\nbut better performance',
             bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#2E86AB', alpha=0.9))
 
 plt.tight_layout()
-plt.savefig('f1_and_time_comparison.png', dpi=300, bbox_inches='tight')
-print("✅ Plot saved to: f1_and_time_comparison.png")
+plt.savefig('head_vs_lora_comparison.png', dpi=300, bbox_inches='tight')
+print("✅ Plot saved to: head_vs_lora_comparison.png")
 
 # Print summary statistics
 print("\n📊 Summary Statistics:")
