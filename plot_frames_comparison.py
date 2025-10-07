@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Plot F1-score comparison across different frame counts.
+Plot F1-score and training time comparison across different frame counts.
 """
 
 import matplotlib.pyplot as plt
@@ -22,48 +22,61 @@ avg_f1 = [
     (1.0 + 0.968 + 0.8 + 0.8) / 4  # 32 frames: 89.2%
 ]
 
-# Test accuracies
-test_acc = [71.67, 90.00, 90.00]
+# Training times in minutes
+training_time = [55.22, 84.89, 131.72]
 
-# Create figure
-fig, ax = plt.subplots(figsize=(10, 7))
+# Create figure with 2 subplots
+fig, axes = plt.subplots(1, 2, figsize=(14, 6))
 
-# Plot average F1-score
-ax.plot(frames, [f*100 for f in avg_f1], 'o-', linewidth=3, markersize=12,
-        label='Average F1-Score', color='#2E86AB')
+# Plot 1: Average F1-Score vs Frames
+ax1 = axes[0]
+ax1.plot(frames, [f*100 for f in avg_f1], 'o-', linewidth=3, markersize=12,
+        color='#2E86AB')
 
-# Plot test accuracy for comparison
-ax.plot(frames, test_acc, 's--', linewidth=2.5, markersize=10,
-        label='Test Accuracy', color='#A23B72', alpha=0.7)
-
-ax.set_xlabel('Frames per Clip', fontsize=13, fontweight='bold')
-ax.set_ylabel('Score (%)', fontsize=13, fontweight='bold')
-ax.set_title('LoRA Fine-tuning: Impact of Temporal Resolution',
-            fontsize=15, fontweight='bold', pad=20)
-ax.grid(True, alpha=0.3, linestyle='--')
-ax.legend(fontsize=12, loc='lower right')
-ax.set_xticks(frames)
-ax.set_ylim([65, 95])
+ax1.set_xlabel('Frames per Clip', fontsize=13, fontweight='bold')
+ax1.set_ylabel('Average F1-Score (%)', fontsize=13, fontweight='bold')
+ax1.set_title('LoRA Performance vs Temporal Resolution',
+            fontsize=14, fontweight='bold', pad=15)
+ax1.grid(True, alpha=0.3, linestyle='--')
+ax1.set_xticks(frames)
+ax1.set_ylim([65, 95])
 
 # Add value labels
 for i, f in enumerate(frames):
-    ax.text(f, avg_f1[i]*100 + 1.5, f'{avg_f1[i]*100:.1f}%',
+    ax1.text(f, avg_f1[i]*100 + 1.5, f'{avg_f1[i]*100:.1f}%',
             ha='center', va='bottom', fontsize=11, fontweight='bold', color='#2E86AB')
-    ax.text(f, test_acc[i] - 1.5, f'{test_acc[i]:.1f}%',
-            ha='center', va='top', fontsize=10, fontweight='bold', color='#A23B72')
 
 # Add annotation
-ax.annotate('Optimal performance\nat 16 frames',
-            xy=(16, avg_f1[1]*100), xytext=(20, 80),
-            fontsize=11, fontweight='bold', color='#2E86AB',
+ax1.annotate('Optimal at 16 frames\n+19.6% over 8 frames',
+            xy=(16, avg_f1[1]*100), xytext=(20, 78),
+            fontsize=10, fontweight='bold', color='#2E86AB',
             arrowprops=dict(arrowstyle='->', color='#2E86AB', lw=2),
             bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#2E86AB', alpha=0.9))
 
-ax.annotate('Diminishing returns\nafter 16 frames',
-            xy=(32, avg_f1[2]*100), xytext=(26, 75),
-            fontsize=10, fontweight='bold', color='#666666',
-            arrowprops=dict(arrowstyle='->', color='#666666', lw=1.5),
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#666666', alpha=0.8))
+# Plot 2: Training Time vs Frames
+ax2 = axes[1]
+ax2.plot(frames, training_time, 'o-', linewidth=3, markersize=12,
+        color='#A23B72')
+
+ax2.set_xlabel('Frames per Clip', fontsize=13, fontweight='bold')
+ax2.set_ylabel('Training Time (minutes)', fontsize=13, fontweight='bold')
+ax2.set_title('Training Cost vs Temporal Resolution',
+            fontsize=14, fontweight='bold', pad=15)
+ax2.grid(True, alpha=0.3, linestyle='--')
+ax2.set_xticks(frames)
+ax2.set_ylim([40, 145])
+
+# Add value labels
+for i, f in enumerate(frames):
+    ax2.text(f, training_time[i] + 3, f'{training_time[i]:.1f} min',
+            ha='center', va='bottom', fontsize=11, fontweight='bold', color='#A23B72')
+
+# Add annotation
+ax2.annotate('32 frames: 1.55x slower\nfor only -0.3% F1-score',
+            xy=(32, training_time[2]), xytext=(20, 110),
+            fontsize=10, fontweight='bold', color='#A23B72',
+            arrowprops=dict(arrowstyle='->', color='#A23B72', lw=2),
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#A23B72', alpha=0.9))
 
 plt.tight_layout()
 plt.savefig('frames_comparison.png', dpi=300, bbox_inches='tight')
@@ -73,13 +86,13 @@ print("✅ Plot saved to: frames_comparison.png")
 print("\n📊 Frames per Clip Comparison (100 videos/class):")
 print("\nAverage F1-Score:")
 for i, f in enumerate(frames):
-    print(f"  {f:2d} frames: {avg_f1[i]*100:.1f}% (Test Acc: {test_acc[i]:.1f}%)")
+    print(f"  {f:2d} frames: {avg_f1[i]*100:.1f}% ({training_time[i]:.1f} min)")
 
 print(f"\nPerformance improvement:")
-print(f"  8 → 16 frames: +{(avg_f1[1]-avg_f1[0])*100:.1f}% F1-score")
-print(f"  16 → 32 frames: {(avg_f1[2]-avg_f1[1])*100:.1f}% F1-score (slight decrease)")
+print(f"  8 → 16 frames: +{(avg_f1[1]-avg_f1[0])*100:.1f}% F1-score (+{training_time[1]-training_time[0]:.1f} min)")
+print(f"  16 → 32 frames: {(avg_f1[2]-avg_f1[1])*100:.1f}% F1-score (+{training_time[2]-training_time[1]:.1f} min)")
 
 print(f"\nKey insight: 16 frames provides optimal balance between:")
-print(f"  - Temporal context for action recognition")
-print(f"  - Computational efficiency (85 min vs 132 min for 32 frames)")
-print(f"  - Model performance (89.5% F1-score)")
+print(f"  - Performance: 89.5% F1-score (+19.6% over 8 frames)")
+print(f"  - Efficiency: 85 min training (vs 132 min for 32 frames)")
+print(f"  - Diminishing returns beyond 16 frames (-0.3% F1 for +55% training time)")
