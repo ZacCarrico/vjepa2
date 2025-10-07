@@ -80,9 +80,9 @@ def create_comparison_figure(metrics):
     lora_train_time = [metrics["lora"][v]["total_training_time"]/60 for v in video_counts]
 
     # Left panel: Test Accuracy
-    ax1.plot(video_counts, head_test_acc, 'o-', label='Head-only (4.1K params)',
+    ax1.plot(video_counts, head_test_acc, 'o-', label='Classification Layer',
              color=color_head, linewidth=2.5, markersize=10)
-    ax1.plot(video_counts, lora_test_acc, 's-', label='LoRA (496K params)',
+    ax1.plot(video_counts, lora_test_acc, 's-', label='LoRA+Classification Layer',
              color=color_lora, linewidth=2.5, markersize=10)
 
     ax1.set_xlabel('Videos per Class', fontsize=14)
@@ -101,9 +101,9 @@ def create_comparison_figure(metrics):
                 fontsize=11, color=color_lora)
 
     # Right panel: Training Time
-    ax2.plot(video_counts, head_train_time, 'o-', label='Head-only',
+    ax2.plot(video_counts, head_train_time, 'o-', label='Classification Layer',
              color=color_head, linewidth=2.5, markersize=10)
-    ax2.plot(video_counts, lora_train_time, 's-', label='LoRA',
+    ax2.plot(video_counts, lora_train_time, 's-', label='LoRA+Classification Layer',
              color=color_lora, linewidth=2.5, markersize=10)
 
     ax2.set_xlabel('Videos per Class', fontsize=14)
