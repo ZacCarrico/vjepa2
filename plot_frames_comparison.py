@@ -46,13 +46,6 @@ for i, f in enumerate(frames):
     ax1.text(f, avg_f1[i]*100 + 1.5, f'{avg_f1[i]*100:.1f}%',
             ha='center', va='bottom', fontsize=11, fontweight='bold', color='#2E86AB')
 
-# Add annotation
-ax1.annotate('Optimal at 16 frames\n+19.6% over 8 frames',
-            xy=(16, avg_f1[1]*100), xytext=(20, 78),
-            fontsize=10, fontweight='bold', color='#2E86AB',
-            arrowprops=dict(arrowstyle='->', color='#2E86AB', lw=2),
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#2E86AB', alpha=0.9))
-
 # Plot 2: Training Time vs Frames
 ax2 = axes[1]
 ax2.plot(frames, training_time, 'o-', linewidth=3, markersize=12,
@@ -70,13 +63,6 @@ ax2.set_ylim([40, 145])
 for i, f in enumerate(frames):
     ax2.text(f, training_time[i] + 3, f'{training_time[i]:.1f} min',
             ha='center', va='bottom', fontsize=11, fontweight='bold', color='#A23B72')
-
-# Add annotation
-ax2.annotate('32 frames: 1.55x slower\nfor only -0.3% F1-score',
-            xy=(32, training_time[2]), xytext=(20, 110),
-            fontsize=10, fontweight='bold', color='#A23B72',
-            arrowprops=dict(arrowstyle='->', color='#A23B72', lw=2),
-            bbox=dict(boxstyle='round,pad=0.5', facecolor='white', edgecolor='#A23B72', alpha=0.9))
 
 plt.tight_layout()
 plt.savefig('frames_comparison.png', dpi=300, bbox_inches='tight')
