@@ -253,6 +253,10 @@ def main():
         config.lora_alpha = args.lora_alpha
     if args.lora_dropout is not None:
         config.lora_dropout = args.lora_dropout
+    if args.frames_per_clip is not None:
+        config.frames_per_clip = args.frames_per_clip
+    if args.accumulation_steps is not None:
+        config.accumulation_steps = args.accumulation_steps
 
     # Create timestamp for output files
     timestamp = datetime.now().strftime("%y%m%d-%H%M%S")
