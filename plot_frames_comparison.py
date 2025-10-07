@@ -49,7 +49,7 @@ for i, f in enumerate(frames):
 # Plot 2: Training Time vs Frames
 ax2 = axes[1]
 ax2.plot(frames, training_time, 'o-', linewidth=3, markersize=12,
-        color='#A23B72')
+        color='#2E86AB')
 
 ax2.set_xlabel('Frames per Clip', fontsize=13, fontweight='bold')
 ax2.set_ylabel('Training Time (minutes)', fontsize=13, fontweight='bold')
@@ -62,7 +62,7 @@ ax2.set_ylim([40, 145])
 # Add value labels
 for i, f in enumerate(frames):
     ax2.text(f, training_time[i] + 3, f'{training_time[i]:.1f} min',
-            ha='center', va='bottom', fontsize=11, fontweight='bold', color='#A23B72')
+            ha='center', va='bottom', fontsize=11, fontweight='bold', color='#2E86AB')
 
 plt.tight_layout()
 plt.savefig('frames_comparison.png', dpi=300, bbox_inches='tight')
