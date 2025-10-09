@@ -16,9 +16,9 @@ graph LR
     G --> I[Backpropagation]
     I --> J[Parameter Updates]
 
-    style B fill:#e3f2fd
-    style E fill:#e8f5e8
-    style G fill:#fff3e0
+    style B fill:#e3f2fd,stroke:#1976d2
+    style E fill:#e8f5e8,stroke:#4caf50
+    style G fill:#fff3e0,stroke:#f57c00
 ```
 
 ## V-JEPA 2 Inference
@@ -50,11 +50,11 @@ graph LR
     J --> K[Classification Head]
     K --> L[Output Logits]
 
-    style D fill:#e1f5fe
-    style E fill:#e1f5fe
-    style F fill:#e1f5fe
-    style G fill:#e1f5fe
-    style K fill:#e8f5e8
+    style D fill:#e1f5fe,stroke:#0288d1
+    style E fill:#e1f5fe,stroke:#0288d1
+    style F fill:#e1f5fe,stroke:#0288d1
+    style G fill:#e1f5fe,stroke:#0288d1
+    style K fill:#e8f5e8,stroke:#4caf50
 ```
 
 ## V-JEPA 2 Model with LoRA Adapters
@@ -92,11 +92,49 @@ graph LR
     J --> K[Classification<br/>Head<br/>TRAINABLE]
     K --> L[Output<br/>Logits]
 
-    style D1 fill:#ffcdd2
-    style G1 fill:#ffcdd2
-    style D2 fill:#c8e6c9
-    style G2 fill:#c8e6c9
-    style K fill:#c8e6c9
+    style D1 fill:#ffcdd2,stroke:#c62828
+    style G1 fill:#ffcdd2,stroke:#c62828
+    style D2 fill:#c8e6c9,stroke:#388e3c
+    style G2 fill:#c8e6c9,stroke:#388e3c
+    style K fill:#c8e6c9,stroke:#388e3c
+```
+
+## Weight Update Comparison: Regular Fine-tuning vs LoRA
+```mermaid
+%%{init: {'theme':'base', 'themeVariables': {'fontSize':'14px'}}}%%
+graph TB
+    subgraph Regular["Weight update in regular finetuning"]
+        I1[Inputs<br/>d] --> W1[Pretrained<br/>weights<br/>W]
+        I1 --> DW1[Weight<br/>update<br/>ΔW]
+        W1 --> ADD1[+]
+        DW1 --> ADD1
+        ADD1 --> O1[Outputs]
+
+        style W1 fill:#808080,stroke:#424242,color:#fff
+        style DW1 fill:#1e88e5,stroke:#0d47a1,color:#fff
+        style I1 fill:#000,stroke:#000,color:#fff
+        style O1 fill:#000,stroke:#000,color:#fff
+    end
+
+    subgraph LoRA["Weight update in LoRA"]
+        I2[Inputs x<br/>d] --> W2[Pretrained<br/>weights<br/>W]
+        I2 --> A[Matrix A<br/>d → r]
+        A --> B[Matrix B<br/>r → d]
+        W2 --> ADD2[+]
+        B --> ADD2
+        ADD2 --> O2[Outputs]
+
+        NOTE1["LoRA matrices A and B<br/>approximate ΔW = BA"]
+        NOTE2["Inner dimension r<br/>is a hyperparameter"]
+
+        style W2 fill:#808080,stroke:#424242,color:#fff
+        style A fill:#1e88e5,stroke:#0d47a1,color:#fff
+        style B fill:#1e88e5,stroke:#0d47a1,color:#fff
+        style I2 fill:#000,stroke:#000,color:#fff
+        style O2 fill:#000,stroke:#000,color:#fff
+        style NOTE1 fill:#fff,stroke:#e0e0e0,color:#000
+        style NOTE2 fill:#fff,stroke:#e0e0e0,color:#000
+    end
 ```
 
 ## LoRA Attention Layer (Simplified for Slides)
@@ -123,10 +161,10 @@ graph LR
     D --> F
     G --> H[...]
 
-    style A fill:#ffcdd2
-    style E fill:#ffcdd2
-    style B fill:#c8e6c9
-    style F fill:#c8e6c9
+    style A fill:#ffcdd2,stroke:#c62828
+    style E fill:#ffcdd2,stroke:#c62828
+    style B fill:#c8e6c9,stroke:#388e3c
+    style F fill:#c8e6c9,stroke:#388e3c
 ```
 
 ## LoRA Layer Internal Structure
@@ -144,10 +182,10 @@ graph LR
     G --> H
     H --> I[Output]
 
-    style B fill:#ffcdd2
-    style D fill:#c8e6c9
-    style F fill:#c8e6c9
-    style G fill:#fff3e0
+    style B fill:#ffcdd2,stroke:#c62828
+    style D fill:#c8e6c9,stroke:#388e3c
+    style F fill:#c8e6c9,stroke:#388e3c
+    style G fill:#fff3e0,stroke:#f57c00
 ```
 
 ### LoRA Mathematical Formulation
@@ -185,10 +223,10 @@ graph LR
     A --> D[New Classification Head<br/>Trainable]
     D --> E[UCF-101 Subset Classes<br/>10 outputs]
 
-    style B fill:#ffcdd2
-    style C fill:#ffcdd2
-    style D fill:#c8e6c9
-    style E fill:#c8e6c9
+    style B fill:#ffcdd2,stroke:#c62828
+    style C fill:#ffcdd2,stroke:#c62828
+    style D fill:#c8e6c9,stroke:#388e3c
+    style E fill:#c8e6c9,stroke:#388e3c
 ```
 
 ## Key Changes Summary
